@@ -3,7 +3,7 @@ mod input;
 mod config;
 
 use std::{ffi::{c_void, OsStr, OsString}, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::PathBuf, thread, time::Duration};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use input::InputBuffer;
 use minhook::MinHook;
 use config::Config;
@@ -30,7 +30,7 @@ const SHADOWRUSH: u32 = 6000;
 const SHADOWFALL: u32 = 7600;
 
 const MORTAL_DRAW: u32 = 5700;
-const EMPOWERED_MORTAL_DRAW: u32 = 9999;
+const EMPOWERED_MORTAL_DRAW: u32 = 7300;
 
 //----------------------------------------------------------------------------
 //
@@ -110,7 +110,7 @@ fn modulate(mut path: PathBuf) -> Result<()> {
         // TODO ? operator doesn't work on MinHook
         // Hijack the input processing function
         PROCESS_INPUT = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).unwrap() as usize; 
-        MinHook::enable_all_hooks().unwrap();
+        MinHook::enable_all_hooks().map_err(|e|anyhow!("MH_STATUS: {}", e as u8))?;
     }
     Ok(())
 }
