@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use anyhow::Result;
 use log::warn;
-use crate::input::{Input::*, InputsTrie, Inputs};
+use crate::input::{Input::*, Inputs, InputsTrie};
 
 pub struct Config{
     pub default_art: u32,
@@ -36,11 +36,11 @@ impl Config {
             };
 
             // filter out all illegal IDs to prevent possible bugs
-            // TODO: compatability with other mods with new combat arts?
-            if !matches!(id, 295|444|378|317|431|468|312|494|357|403|461|473|411|423|484|437|488) {
+            if !matches!(id, 5000..=10000) {
                 warn!("Illegal combat art ID {id} is ignored.");
                 continue;
             }
+
             
             if inputs.eq_ignore_ascii_case("default") {
                 config.default_art = id;

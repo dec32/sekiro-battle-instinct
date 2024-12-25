@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{OsStr, OsString}, mem, os::{raw::c_void, windows::ffi::{OsStrExt, OsStringExt}}, path::PathBuf, thread, time::Duration};
+use std::{ffi::{c_void, OsStr, OsString}, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::PathBuf, thread, time::Duration};
 use anyhow::Result;
 use input::InputBuffer;
 use minhook::MinHook;
@@ -51,7 +51,7 @@ extern "stdcall" fn DirectInput8Create(hinst: HINSTANCE, dwversion: u32, riidltf
 }
 
 
-fn load_dll() -> windows::core::Result<usize>{
+fn load_dll() -> windows::core::Result<usize> {
     let mut path = vec![0;128];
     unsafe {
         let len = GetSystemDirectoryW(Some(&mut path));
@@ -87,6 +87,7 @@ fn modulate(mut path: PathBuf) -> Result<()> {
         path.push("battle_instinct.cfg");
         CONFIG = Config::load(&path)?;
         // TODO ? operator doesn't work on MinHook
+        // Hijack the input processing function
         PROCESS_INPUT = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).unwrap() as usize; 
         MinHook::enable_all_hooks().unwrap();
     }
@@ -94,19 +95,18 @@ fn modulate(mut path: PathBuf) -> Result<()> {
 }
 
 
-// Some unholy static mut to track states
-static mut BUFFER: InputBuffer = InputBuffer::new();
-static mut CUR_COMBAT_ART: u32 = 0;
-static mut BLOCKING_LAST_FRAME: bool = false;
-
-fn process_input(input_handler: usize, arg: usize) -> usize {    
+fn process_input(input_handler: *const c_void, arg: usize) -> usize {
+    // Some unholy static mut to track states
+    static mut BUFFER: InputBuffer = InputBuffer::new();
+    static mut BLOCKING_LAST_FRAME: bool = false;
+    
     unsafe fn is_key_down(keycode: i32) -> bool {
         GetKeyState(keycode) as u16 & 0x8000 != 0
     }
 
     unsafe {
         let blocking_now = is_key_down(0x02);
-        let desired_combat_art = if !BLOCKING_LAST_FRAME && blocking_now && BUFFER.aborted() {
+        let desired_art = if !BLOCKING_LAST_FRAME && blocking_now && BUFFER.aborted() {
             // roll back to the default combat arts when block is pressed if there're no recent inputs
             // TODO 长按右键释放完一个武技后也要能回退到默认武技
             BUFFER.clear();
@@ -120,14 +120,10 @@ fn process_input(input_handler: usize, arg: usize) -> usize {
             let inputs = BUFFER.update(up, down, left, right);
             CONFIG.arts.get(&inputs).unwrap_or(CONFIG.default_art)
         };
-        
-        if desired_combat_art != CUR_COMBAT_ART {
-            set_combat_art(desired_combat_art);
-            CUR_COMBAT_ART = desired_combat_art;
-        }
+        set_combat_art(desired_art);
         BLOCKING_LAST_FRAME = blocking_now;
     }
-    let f = unsafe{ mem::transmute::<_, fn(usize, usize)->usize>(PROCESS_INPUT) };
+    let f = unsafe{ mem::transmute::<_, fn(*const c_void, usize)->usize>(PROCESS_INPUT) };
     f(input_handler, arg)
 }
 
@@ -135,44 +131,100 @@ fn process_input(input_handler: usize, arg: usize) -> usize {
 
 //----------------------------------------------------------------------------
 //
-//  called functions (derive macro)
+//  Wrappers of functions from the original program
 //
 //----------------------------------------------------------------------------
 
+fn set_combat_art(uid: u32) {
+    // equipping the same combat art again can unequip the combat art
+    static mut LAST_UID: u32 = 0;
+    if unsafe { uid == LAST_UID } {
+        return;
+    }
+    // Validate if the player has already obtained the combat art
+    // If so, there should be a corresponding item (with an item ID) representing that art
+    // The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
+    // Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
+    let Some(item_id) = get_item_id(uid) else {
+        return;
+    };
+    // cast the combat art id to some sort of "equip data" array.
+    static mut EQUIP_DATA: [u32;17] = [0;17];
+    let data_pointer = unsafe {
+        EQUIP_DATA[14] = item_id as u32;
+        EQUIP_DATA.as_ptr()
+    };
+    _set_skill_slot(1, data_pointer, true);
+    unsafe {LAST_UID = uid}
+}
+
+
+/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
+/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
+/// When putting things into item slots, the latter shall be used.
+fn get_item_id(uid: u32) -> Option<u64> {
+    // we are going on an adventure of pointers
+    let game_data = unsafe{ *(0x143D5AAC0 as *const usize)};
+    if game_data == 0 {
+        error!("game_data is null");
+        return None
+    }
+
+    let player_game_data = unsafe { *((game_data + 0x8) as *const usize) };
+    if player_game_data == 0 {
+        error!("game_data is null");
+        return None
+    }
+
+    let inventory_data = unsafe { *((player_game_data + 0x5B0) as *const usize)};
+    if inventory_data == 0 {
+        error!("inventory_data is null");
+        return None;
+    }
+    let inventory_data = inventory_data + 0x10;
+
+    // finnally get the object
+    let item_id = _get_item_id(inventory_data as *const c_void, &uid);
+    if item_id == 0xFFFFFFFF {
+        return None;
+    }
+    Some(item_id)
+}
+
+
+//----------------------------------------------------------------------------
+//
+//  Functions from the original program
+//
+//----------------------------------------------------------------------------
 
 // TODO use some derive macro to clean up this mess
+const GET_ITEM_ID: usize = 0x140C3D680;
 const SET_SKILL_SLOT: usize = 0x140D592F0;
 const PLAY_UI_SOUND: usize = 0x1408CE960;
 
 
-fn set_skill_slot(equip_slot: isize, data_pointer: *const u32, ignore_equip_lock: bool) {
-    // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
-    // data_pointer: data_pointer[14] is for combat art ID. data_pointer[16] is for prosthetics ID
-    let f = unsafe{ mem::transmute::<_, fn(isize, *const u32 ,bool)>(SET_SKILL_SLOT) };
-    f(equip_slot, data_pointer, ignore_equip_lock);
+// When a player abtains combat arts and prosthetic tools, they become items in the inventory.
+// And to equip combat arts / prosthetic tools into slots, their IDs as items shall be used instead of their orignal IDs.
+fn _get_item_id(inventory: *const c_void, id: &u32) -> u64 {
+    let f = unsafe{ mem::transmute::<_, fn(*const c_void, id: &u32)->u64>(GET_ITEM_ID) };
+    f(inventory, id)
 }
 
+// equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
+// equip_data: data_pointer[14] is for combat art ID. data_pointer[16] is for prosthetics ID
+fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool) {    
+    let f = unsafe{ mem::transmute::<_, fn(isize, *const u32 ,bool)>(SET_SKILL_SLOT) };
+    f(equip_slot, equip_data, ignore_equip_lock);
+}
+
+
+// for debugging
 #[allow(dead_code)]
-fn play_ui_sound(arg1: isize, arg2: isize) {
+fn _play_ui_sound(arg1: isize, arg2: isize) {
     let f = unsafe{ mem::transmute::<_, fn(isize, isize)>(PLAY_UI_SOUND) };
     f(arg1, arg2);
 }
 
 
 
-//----------------------------------------------------------------------------
-//
-//  wrapper for called functions (derive macro)
-//
-//----------------------------------------------------------------------------
-
-fn set_combat_art(id: u32) {
-    // cast the combat art id to some sort of "equip data" array.
-    static mut EQUIP_DATA: [u32;17] = [0;17];
-    // equip the same combat art again will drop the combat art (sometimes?)
-    let data_pointer = unsafe {
-        EQUIP_DATA[14] = id;
-        EQUIP_DATA.as_ptr()
-    };
-    set_skill_slot(1, data_pointer, true);
-}

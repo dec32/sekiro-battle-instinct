@@ -1,7 +1,4 @@
 use arrayvec::ArrayVec;
-use log::debug;
-
-
 
 pub const INPUTS_CAP: usize = 3;
 const MAX_AGE: u8 = 10;
@@ -31,9 +28,9 @@ impl From<usize> for Input {
 /// A stack-allocated container for input sequences
 pub type Inputs = ArrayVec<Input, INPUTS_CAP>;
 
-
 /// A input buffer that remembers the most recent 3 directional inputs
 /// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age
+
 pub struct InputBuffer {
     inputs: Inputs,
     holds: [bool; 4],
@@ -64,7 +61,6 @@ impl InputBuffer {
         }
 
         if updated {
-            debug!("Buffer: {:?}", self.inputs);
             self.age = 0
         } else {
             self.age = u8::min(self.age + 1, MAX_AGE)
