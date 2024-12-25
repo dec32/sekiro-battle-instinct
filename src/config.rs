@@ -5,14 +5,14 @@ use log::warn;
 use crate::input::{Input::*, Inputs, InputsTrie};
 
 pub struct Config{
-    pub default_art: u32,
+    pub default_art: Option<u32>,
     pub arts: InputsTrie<u32>
 }
 
 impl Config {
     pub const fn new() -> Config {
         Config {
-            default_art: 295, // Wirlwind Slash
+            default_art: None, // Wirlwind Slash
             arts: InputsTrie::new(),
         }
     }
@@ -42,8 +42,8 @@ impl Config {
             }
 
             
-            if inputs.eq_ignore_ascii_case("default") {
-                config.default_art = id;
+            if inputs.eq_ignore_ascii_case("none") || matches!(inputs, "∅" | "空")  {
+                config.default_art = Some(id);
             } else {
                 let inputs = inputs.chars()
                     .filter_map(|ch|match ch {

@@ -13,6 +13,27 @@ use ::log::{debug, error};
 
 //----------------------------------------------------------------------------
 //
+//  Some basic constants
+//
+//----------------------------------------------------------------------------
+
+const ICHIMONJI: u32 = 5300;
+const ICHIMONJI_DOUBLE: u32 = 7100;
+
+const PRAYING_STRIKES: u32 = 5900;
+const PRAYING_STRIKES_EXORCISM: u32 = 7500;
+
+const SENPO_LEAPING_KICKS: u32 = 5800;
+const HIGH_MONK: u32 = 7400;
+
+const SHADOWRUSH: u32 = 6000;
+const SHADOWFALL: u32 = 7600;
+
+const MORTAL_DRAW: u32 = 5700;
+const EMPOWERED_MORTAL_DRAW: u32 = 9999;
+
+//----------------------------------------------------------------------------
+//
 //  Entry for the DLL
 //
 //----------------------------------------------------------------------------
@@ -118,9 +139,26 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
             let left = is_key_down(0x41);
             let right = is_key_down(0x44);
             let inputs = BUFFER.update(up, down, left, right);
-            CONFIG.arts.get(&inputs).unwrap_or(CONFIG.default_art)
+            CONFIG.arts.get(&inputs)
         };
-        set_combat_art(desired_art);
+
+        if let Some(desired_art) = desired_art {
+            let equipped = set_combat_art(desired_art);
+            if !equipped {
+                // look for possible for back
+                let fall_back = match desired_art {
+                    ICHIMONJI_DOUBLE =>         Some(ICHIMONJI),
+                    PRAYING_STRIKES_EXORCISM => Some(PRAYING_STRIKES),
+                    HIGH_MONK =>                Some(SENPO_LEAPING_KICKS),
+                    SHADOWFALL =>               Some(SHADOWRUSH),
+                    EMPOWERED_MORTAL_DRAW =>    Some(MORTAL_DRAW), 
+                    _ => None
+                };
+                if let Some(fall_back) = fall_back {
+                    set_combat_art(fall_back);
+                }
+            }
+        }
         BLOCKING_LAST_FRAME = blocking_now;
     }
     let f = unsafe{ mem::transmute::<_, fn(*const c_void, usize)->usize>(PROCESS_INPUT) };
@@ -135,18 +173,18 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
 //
 //----------------------------------------------------------------------------
 
-fn set_combat_art(uid: u32) {
+fn set_combat_art(uid: u32) -> bool {
     // equipping the same combat art again can unequip the combat art
     static mut LAST_UID: u32 = 0;
     if unsafe { uid == LAST_UID } {
-        return;
+        return true;
     }
     // Validate if the player has already obtained the combat art
     // If so, there should be a corresponding item (with an item ID) representing that art
     // The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
     // Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
     let Some(item_id) = get_item_id(uid) else {
-        return;
+        return false;
     };
     // cast the combat art id to some sort of "equip data" array.
     static mut EQUIP_DATA: [u32;17] = [0;17];
@@ -156,6 +194,7 @@ fn set_combat_art(uid: u32) {
     };
     _set_skill_slot(1, data_pointer, true);
     unsafe {LAST_UID = uid}
+    return true;
 }
 
 
