@@ -3,7 +3,7 @@ mod input;
 mod config;
 
 use std::{ffi::{c_void, OsStr, OsString}, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::PathBuf, thread, time::Duration};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use input::InputBuffer;
 use minhook::MinHook;
 use config::Config;
@@ -110,7 +110,7 @@ fn modulate(mut path: PathBuf) -> Result<()> {
         // TODO ? operator doesn't work on MinHook
         // Hijack the input processing function
         PROCESS_INPUT = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).unwrap() as usize; 
-        MinHook::enable_all_hooks().map_err(|e|anyhow!("MH_STATUS: {}", e as u8))?;
+        MinHook::enable_all_hooks().unwrap();
     }
     Ok(())
 }
@@ -243,8 +243,8 @@ const SET_SKILL_SLOT: usize = 0x140D592F0;
 const PLAY_UI_SOUND: usize = 0x1408CE960;
 
 
-// When a player abtains combat arts and prosthetic tools, they become items in the inventory.
-// And to equip combat arts / prosthetic tools into slots, their IDs as items shall be used instead of their orignal IDs.
+// When a player obtains combat arts/prosthetic tools, they become items in the inventory.
+// When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
 fn _get_item_id(inventory: *const c_void, id: &u32) -> u64 {
     let f = unsafe{ mem::transmute::<_, fn(*const c_void, id: &u32)->u64>(GET_ITEM_ID) };
     f(inventory, id)
@@ -253,7 +253,7 @@ fn _get_item_id(inventory: *const c_void, id: &u32) -> u64 {
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
 // equip_data: data_pointer[14] is for combat art ID. data_pointer[16] is for prosthetics ID
 fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool) {    
-    let f = unsafe{ mem::transmute::<_, fn(isize, *const u32 ,bool)>(SET_SKILL_SLOT) };
+    let f = unsafe{ mem::transmute::<_, fn(isize, *const u32, bool)>(SET_SKILL_SLOT) };
     f(equip_slot, equip_data, ignore_equip_lock);
 }
 
