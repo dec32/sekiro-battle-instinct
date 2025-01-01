@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::PathBuf, thread, time::Duration};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, thread, time::Duration};
 use anyhow::Result;
 use input::InputBuffer;
 use minhook::MinHook;
@@ -46,8 +46,10 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
         let mut path = vec![0;128];
         let len = unsafe { GetModuleFileNameW(dll_module, path.as_mut_slice()) } as usize;
         let dll_path = PathBuf::from(OsString::from_wide(&path[..len]));
-        thread::spawn(||{
-            modulate(dll_path).inspect_err(|e|error!("Errored occured when initializing. {e}")).ok();
+        thread::spawn(move ||{
+            let dir_path = dll_path.parent().unwrap();
+            chainload(dir_path).inspect_err(|e|error!("Failed to chainload other dinput8.dll files. {e}")).ok();
+            modulate(dir_path).inspect_err(|e|error!("Errored occured when initializing. {e}")).ok();
         });
     }
     true
@@ -92,6 +94,36 @@ fn load_dll() -> windows::core::Result<usize> {
 
 //----------------------------------------------------------------------------
 //
+//  Chainload other dinput8.dll files used by other MODs
+//
+//----------------------------------------------------------------------------
+
+fn chainload(path: &Path) -> Result<()> {
+    for entry in fs::read_dir(path)?.filter_map(Result::ok) {
+        let name = entry.file_name();
+        let name_lossy = name.to_string_lossy();
+        // We really needs an STD regex lib
+        if !name_lossy.starts_with("dinput8_") {
+            continue;
+        }
+        if !name_lossy.ends_with(".dll") {
+            continue;
+        }
+        // Load the DLL
+        let path = path.join(&name);
+        let path = path.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
+        unsafe {
+            LoadLibraryW(PCWSTR::from_raw(path.as_ptr()))?;
+        }
+        debug!("Chainloaded dll: {name_lossy}");
+    }
+    Ok(())
+}
+
+
+
+//----------------------------------------------------------------------------
+//
 //  Actual content of the mod
 //
 //----------------------------------------------------------------------------
@@ -99,13 +131,12 @@ fn load_dll() -> windows::core::Result<usize> {
 static mut PROCESS_INPUT: usize = 0x140B2C190;
 static mut CONFIG: Config = Config::new();
 
-fn modulate(mut path: PathBuf) -> Result<()> {
+fn modulate(path: &Path) -> Result<()> {
     // hooking will fail (MH_ERROR_UNSUPPORTED_FUNCTION) if it starts too soon
     thread::sleep(Duration::from_secs(30));
     unsafe {
         // Loading configs
-        path.pop();
-        path.push("battle_instinct.cfg");
+        let path = path.join("battle_instinct.cfg");
         CONFIG = Config::load(&path)?;
         // TODO ? operator doesn't work on MinHook
         // Hijack the input processing function
