@@ -8,7 +8,7 @@ use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
 use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::KeyboardAndMouse::GetKeyState}};
-use ::log::{debug, error};
+use ::log::{debug, error, trace};
 
 
 //----------------------------------------------------------------------------
@@ -147,7 +147,7 @@ static mut CONFIG: Config = Config::new();
 
 fn modulate(path: &Path) -> Result<()> {
     // hooking will fail (MH_ERROR_UNSUPPORTED_FUNCTION) if it starts too soon
-    thread::sleep(Duration::from_secs(30));
+    thread::sleep(Duration::from_secs(10));
     unsafe {
         // Loading configs
         let path = path.join("battle_instinct.cfg");
@@ -165,6 +165,8 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     // Some unholy static mut to track states
     static mut BUFFER: InputBuffer = InputBuffer::new();
     static mut BLOCKING_LAST_FRAME: bool = false;
+    static mut ATTACKING_LAST_FRAME: bool = false;
+    static mut INJECTING_LAST_FRAME: bool = false;
     
     unsafe fn is_key_down(keycode: i32) -> bool {
         GetKeyState(keycode) as u16 & 0x8000 != 0
@@ -173,10 +175,12 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     unsafe {
         // If you forget what a bitfield is please refer to Wikipedia
         let action_bitfield = mem::transmute::<_, &mut u64>(input_handler as usize + 0x10);
-        let attacking = *action_bitfield | ATTACK != 0;
-        let blocking = *action_bitfield | BLOCK != 0;
-        let blocking_just_now = !BLOCKING_LAST_FRAME && blocking;
-
+        let attacking = *action_bitfield & ATTACK != 0;
+        let blocking = *action_bitfield & BLOCK != 0;
+        let attacked_just_now = !ATTACKING_LAST_FRAME && attacking;
+        let blocked_just_now = !BLOCKING_LAST_FRAME && blocking;
+        ATTACKING_LAST_FRAME = attacking;
+        BLOCKING_LAST_FRAME = blocking;
 
         // Keep track of the recent direction inputs
         let up = is_key_down(0x57);
@@ -185,7 +189,7 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
         let right = is_key_down(0x44);
         let inputs = BUFFER.update(up, down, left, right);
         
-        let desired_art = if blocking_just_now && BUFFER.aborted() {
+        let desired_art = if blocked_just_now && BUFFER.aborted() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             BUFFER.clear(); 
@@ -214,16 +218,26 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
             }
         }
 
-        // quirky inputs like [Up, Up] or [Down, Up] clearly means combat arts intead of moving (who moves like that?)
-        // in such cases, using only ATTACK to perform combat arts should be allowed
-        if attacking && inputs.meant_for_art(){
-            *action_bitfield |= BLOCK
+        // quirky inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of quirky walking (who walks like that?)
+        // in such cases, player can perform combat arts without BLOCK button
+        if INJECTING_LAST_FRAME {
+            // rollback the injection
+            *action_bitfield &= !BLOCK;
+            INJECTING_LAST_FRAME = false;
+        }
+        if attacked_just_now && inputs.meant_for_art() && !BUFFER.aborted() {
+            // injection
+            *action_bitfield |= BLOCK;
+            INJECTING_LAST_FRAME = true;
         }
 
-        BLOCKING_LAST_FRAME = blocking;
+        if *action_bitfield != 0 {
+            trace!("Action: {:016x}", action_bitfield)
+        }
     }
     let f = unsafe{ mem::transmute::<_, fn(*const c_void, usize)->usize>(PROCESS_INPUT) };
     f(input_handler, arg)
+    
 }
 
 
