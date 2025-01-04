@@ -1,4 +1,5 @@
 use arrayvec::ArrayVec;
+use Input::*;
 
 pub const INPUTS_CAP: usize = 3;
 const MAX_AGE: u8 = 10;
@@ -15,10 +16,10 @@ pub enum Input {
 impl From<usize> for Input {
     fn from(value: usize) -> Self {
         match value {
-            1 => Input::Up,
-            2 => Input::Down,
-            3 => Input::Left,
-            4 => Input::Right,
+            1 => Up,
+            2 => Down,
+            3 => Left,
+            4 => Right,
             _ => panic!("You idiot you shouldn't mess up such simple thing.")
         }
     }
@@ -27,6 +28,16 @@ impl From<usize> for Input {
 
 /// A stack-allocated container for input sequences
 pub type Inputs = ArrayVec<Input, INPUTS_CAP>;
+pub trait InputsExt {
+    fn meant_for_art(&self) -> bool;
+}
+impl InputsExt for Inputs {
+    fn meant_for_art(&self) -> bool {
+        matches!(self.as_slice(), [Up, Up] | [Down, Down] | [Left, Left] | [Right, Right] | [Up, Down] | [Down, Up] | [Left, Right] | [Right, Left])
+    }
+}
+
+
 
 /// A input buffer that remembers the most recent 3 directional inputs
 /// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age
@@ -67,6 +78,7 @@ impl InputBuffer {
         }
         self.inputs.clone()
     }
+
 
     pub fn aborted(&self) -> bool {
         self.holds == [false, false, false, false] && self.age >= MAX_AGE

@@ -4,7 +4,7 @@ mod config;
 
 use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, thread, time::Duration};
 use anyhow::Result;
-use input::InputBuffer;
+use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
 use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::KeyboardAndMouse::GetKeyState}};
@@ -17,6 +17,8 @@ use ::log::{debug, error};
 //
 //----------------------------------------------------------------------------
 
+
+// Combat art UIDs
 const ICHIMONJI: u32 = 5300;
 const ICHIMONJI_DOUBLE: u32 = 7100;
 
@@ -31,6 +33,18 @@ const SHADOWFALL: u32 = 7600;
 
 const MORTAL_DRAW: u32 = 5700;
 const EMPOWERED_MORTAL_DRAW: u32 = 7300;
+
+// Action bitfields
+const ATTACK: u64 = 1;
+const BLOCK: u64 = 4;
+#[allow(unused)]
+const JUMP: u64 = 16;
+#[allow(unused)]
+const SWITCH_PROSTHETIC: u64 = 1024;
+#[allow(unused)]
+const DODGE: u64 = 8192;
+#[allow(unused)]
+const USE_PROSTHETIC: u64 = 1074003970;
 
 //----------------------------------------------------------------------------
 //
@@ -157,26 +171,35 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     }
 
     unsafe {
-        let blocking_now = is_key_down(0x02);
-        let desired_art = if !BLOCKING_LAST_FRAME && blocking_now && BUFFER.aborted() {
-            // roll back to the default combat arts when block is pressed if there're no recent inputs
-            // TODO 长按右键释放完一个武技后也要能回退到默认武技
-            BUFFER.clear();
+        // If you forget what a bitfield is please refer to Wikipedia
+        let action_bitfield = mem::transmute::<_, &mut u64>(input_handler as usize + 0x10);
+        let attacking = *action_bitfield | ATTACK != 0;
+        let blocking = *action_bitfield | BLOCK != 0;
+        let blocking_just_now = !BLOCKING_LAST_FRAME && blocking;
+
+
+        // Keep track of the recent direction inputs
+        let up = is_key_down(0x57);
+        let down = is_key_down(0x53);
+        let left = is_key_down(0x41);
+        let right = is_key_down(0x44);
+        let inputs = BUFFER.update(up, down, left, right);
+        
+        let desired_art = if blocking_just_now && BUFFER.aborted() {
+            // when there're no recent inputs and the block button is just pressed, roll back to the default art
+            // also manually clear the input buffer so the desired art in the next few frames will still be the default art
+            BUFFER.clear(); 
             CONFIG.default_art
         } else {
-            // otherwise let's keep keeping track recent diretional inputs
-            let up = is_key_down(0x57);
-            let down = is_key_down(0x53);
-            let left = is_key_down(0x41);
-            let right = is_key_down(0x44);
-            let inputs = BUFFER.update(up, down, left, right);
+            // Switch to the desired combat arts if the player is giving directional inputs
             CONFIG.arts.get(&inputs)
         };
 
+        // equip the desired combat art or the fallback version
         if let Some(desired_art) = desired_art {
             let equipped = set_combat_art(desired_art);
             if !equipped {
-                // look for possible for back
+                // look for possible fallback
                 let fall_back = match desired_art {
                     ICHIMONJI_DOUBLE =>         Some(ICHIMONJI),
                     PRAYING_STRIKES_EXORCISM => Some(PRAYING_STRIKES),
@@ -190,12 +213,18 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
                 }
             }
         }
-        BLOCKING_LAST_FRAME = blocking_now;
+
+        // quirky inputs like [Up, Up] or [Down, Up] clearly means combat arts intead of moving (who moves like that?)
+        // in such cases, using only ATTACK to perform combat arts should be allowed
+        if attacking && inputs.meant_for_art(){
+            *action_bitfield |= BLOCK
+        }
+
+        BLOCKING_LAST_FRAME = blocking;
     }
     let f = unsafe{ mem::transmute::<_, fn(*const c_void, usize)->usize>(PROCESS_INPUT) };
     f(input_handler, arg)
 }
-
 
 
 //----------------------------------------------------------------------------
