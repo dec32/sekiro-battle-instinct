@@ -7,7 +7,7 @@ use anyhow::Result;
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
-use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::KeyboardAndMouse::GetKeyState}};
+use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, ERROR_SUCCESS, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::{KeyboardAndMouse::GetKeyState, XboxController::XInputGetState}}};
 use ::log::{debug, error, trace};
 
 
@@ -17,6 +17,8 @@ use ::log::{debug, error, trace};
 //
 //----------------------------------------------------------------------------
 
+// behavior
+const INJECTION_DURATION: u8 = 10;
 
 // Combat art UIDs
 const ICHIMONJI: u32 = 5300;
@@ -35,16 +37,16 @@ const MORTAL_DRAW: u32 = 5700;
 const EMPOWERED_MORTAL_DRAW: u32 = 7300;
 
 // Action bitfields
-const ATTACK: u64 = 1;
-const BLOCK: u64 = 4;
+const ATTACK: u64 = 0x1;
+const BLOCK: u64 = 0x4;
 #[allow(unused)]
-const JUMP: u64 = 16;
+const JUMP: u64 =0x10;
 #[allow(unused)]
-const SWITCH_PROSTHETIC: u64 = 1024;
+const SWITCH_PROSTHETIC: u64 = 0x400;
 #[allow(unused)]
-const DODGE: u64 = 8192;
+const DODGE: u64 = 0x2000;
 #[allow(unused)]
-const USE_PROSTHETIC: u64 = 1074003970;
+const USE_PROSTHETIC: u64 = 0x40040002;
 
 //----------------------------------------------------------------------------
 //
@@ -172,6 +174,26 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
         GetKeyState(keycode) as u16 & 0x8000 != 0
     }
 
+    #[allow(unreachable_code)]
+    unsafe fn get_joystick_pos() -> Option<(i16, i16)> {
+        // it seems XInputGetState has a performance issue when there's no controller connected
+        static mut COOL_DOWN: u16 = 0;
+        if COOL_DOWN != 0 {
+            COOL_DOWN -= 1;
+            return None;
+        }
+        let mut xinput_state = mem::zeroed();
+        let res = XInputGetState(0, &mut xinput_state);
+        if res != ERROR_SUCCESS.0 {
+            COOL_DOWN = 300;
+            None
+        } else {
+            // (0, 0) is filtered out so that I can test the keyboard while the controller is still plugged in
+            Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
+                .filter(|pos|*pos != (0, 0))
+        }
+    }
+
     unsafe {
         // If you forget what a bitfield is please refer to Wikipedia
         let action_bitfield = mem::transmute::<_, &mut u64>(input_handler as usize + 0x10);
@@ -182,13 +204,18 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
         ATTACKING_LAST_FRAME = attacking;
         BLOCKING_LAST_FRAME = blocking;
 
-        // Keep track of the recent direction inputs
-        let up = is_key_down(0x57);
-        let down = is_key_down(0x53);
-        let left = is_key_down(0x41);
-        let right = is_key_down(0x44);
-        let inputs = BUFFER.update(up, down, left, right);
-        
+
+        let inputs = if let Some((x, y)) = get_joystick_pos() {
+            // trace!("Pos:[{}, {}]", x, y);
+            BUFFER.update_pos(x, y)
+        } else {
+            let up = is_key_down(0x57);
+            let down = is_key_down(0x53);
+            let left = is_key_down(0x41);
+            let right = is_key_down(0x44);
+            BUFFER.update(up, down, left, right)
+        };
+
         let desired_art = if blocked_just_now && BUFFER.aborted() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
@@ -225,7 +252,7 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
         if INJECTED_FRAMES != 0 {
             *action_bitfield |= BLOCK;
             INJECTED_FRAMES += 1;
-            if INJECTED_FRAMES >= 10 {
+            if INJECTED_FRAMES >= INJECTION_DURATION {
                 // rollback the injection
                 INJECTED_FRAMES = 0;
             }
@@ -237,12 +264,11 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
         }
 
         if *action_bitfield != 0 {
-            trace!("Action: {:016x}", action_bitfield)
+            // trace!("Action: {:016x}", action_bitfield)
         }
     }
     let f = unsafe{ mem::transmute::<_, fn(*const c_void, usize)->usize>(PROCESS_INPUT) };
     f(input_handler, arg)
-    
 }
 
 
@@ -273,6 +299,7 @@ fn set_combat_art(uid: u32) -> bool {
     };
     _set_skill_slot(1, data_pointer, true);
     unsafe {LAST_UID = uid}
+    trace!("Switched to combat art: {uid}");
     return true;
 }
 

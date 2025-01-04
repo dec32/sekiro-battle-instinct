@@ -33,7 +33,7 @@ fn _setup() -> Result<(), fern::InitError>{
                 message
             ))
         })
-        .level(if RELEASE { Warn } else { Debug })
+        .level(if RELEASE { Warn } else { Trace })
         .chain(fern::log_file(path)?)
         .apply()?;
     Ok(())
