@@ -57,6 +57,7 @@ impl InputBuffer {
         }
     }
 
+    // TODO it should NOT expose outdated buffer to the outside
     pub fn update<'s>(&'s mut self, up: bool, down: bool, left: bool, right: bool) -> Inputs {
         let mut updated = false;
         for (i, hold) in [up, down, left, right].iter().cloned().enumerate() {
