@@ -166,7 +166,7 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     static mut BUFFER: InputBuffer = InputBuffer::new();
     static mut BLOCKING_LAST_FRAME: bool = false;
     static mut ATTACKING_LAST_FRAME: bool = false;
-    static mut INJECTING_LAST_FRAME: bool = false;
+    static mut INJECTED_FRAMES: u8 = 0;
     
     unsafe fn is_key_down(keycode: i32) -> bool {
         GetKeyState(keycode) as u16 & 0x8000 != 0
@@ -220,15 +220,20 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
 
         // quirky inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of quirky walking (who walks like that?)
         // in such cases, player can perform combat arts without BLOCK button
-        if INJECTING_LAST_FRAME {
-            // rollback the injection
-            *action_bitfield &= !BLOCK;
-            INJECTING_LAST_FRAME = false;
+
+        // holds the previous injection for several more frames
+        if INJECTED_FRAMES != 0 {
+            *action_bitfield |= BLOCK;
+            INJECTED_FRAMES += 1;
+            if INJECTED_FRAMES >= 10 {
+                // rollback the injection
+                INJECTED_FRAMES = 0;
+            }
         }
         if attacked_just_now && inputs.meant_for_art() && !BUFFER.aborted() {
             // injection
             *action_bitfield |= BLOCK;
-            INJECTING_LAST_FRAME = true;
+            INJECTED_FRAMES += 1;
         }
 
         if *action_bitfield != 0 {
