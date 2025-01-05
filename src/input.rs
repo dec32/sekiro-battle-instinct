@@ -3,7 +3,7 @@ use log::trace;
 use Input::*;
 
 const INPUTS_CAP: usize = 3;
-const JOYSTICK_THRESHOLD: u16 = (i16::MAX / 5 * 4) as u16;
+const JOYSTICK_THRESHOLD: i16 = i16::MAX / 100 * 80;
 const MAX_AGE: u8 = 10;
 
 /// I love type safety and readability.
@@ -35,7 +35,7 @@ pub trait InputsExt {
 }
 impl InputsExt for Inputs {
     fn meant_for_art(&self) -> bool {
-        matches!(self.as_slice(), [Up, Up] | [Down, Down] | [Left, Left] | [Right, Right] | [Up, Down] | [Down, Up] | [Left, Right] | [Right, Left])
+        self.len() >= 3 || matches!(self.as_slice(), [Up, Up] | [Down, Down] | [Left, Left] | [Right, Right] | [Up, Down] | [Down, Up] | [Left, Right] | [Right, Left])
     }
 }
 
@@ -47,7 +47,6 @@ impl InputsExt for Inputs {
 pub struct InputBuffer {
     inputs: Inputs,
     holds: [bool; 4],
-    longest_distance: u16,
     age: u8,
 }
 
@@ -56,7 +55,6 @@ impl InputBuffer {
         InputBuffer {
             inputs: Inputs::new_const(),
             holds: [false; 4],
-            longest_distance: 0,
             age: 0
         }
     }
@@ -86,13 +84,9 @@ impl InputBuffer {
     }
 
     pub fn update_pos(&mut self, x: i16, y: i16) -> Inputs {
-        // using i16::abs on ui16::MIN can crash the game
-        // which genius designed this?
-        // use chebyshev distance here because I don't want floats involved
-        let distance = u16::max(x.unsigned_abs(), y.unsigned_abs());
-        self.longest_distance = u16::max(self.longest_distance, distance);
-
-        if distance < JOYSTICK_THRESHOLD {
+        let distance_square = (x as i32).pow(2) + (y as i32).pow(2);
+        let threshold_square = (JOYSTICK_THRESHOLD as i32).pow(2);
+        if distance_square < threshold_square {
             self.update(false, false, false, false)
         } else {
             let dir = if y.unsigned_abs() >= x.unsigned_abs() {

@@ -205,6 +205,9 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
         BLOCKING_LAST_FRAME = blocking;
 
 
+        // TODO when Ashina Cross is equipped, ignore all directional inputs until it is finally performed or aborted
+        // TODO inject backward input for Nightjar Reversal
+
         let inputs = if let Some((x, y)) = get_joystick_pos() {
             // trace!("Pos:[{}, {}]", x, y);
             BUFFER.update_pos(x, y)

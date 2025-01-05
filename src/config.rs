@@ -60,7 +60,7 @@ impl Config {
                     continue;
                 }
                 // Optimize the experience a bit
-                if inputs.len() == 2 {
+                if inputs.len() >= 2 {
                     let mut reversed = Inputs::new();
                     reversed.push(inputs[1]);
                     reversed.push(inputs[0]);
