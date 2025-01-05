@@ -1,6 +1,8 @@
 # Battle Instinct
 
-Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to perform any combat art at any moment with directional inputs (<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>).
+Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to perform multiple combat arts using directional inputs.
+
+The MOD supports both keyboard & mouse and game controllers.
 
 ## Install
 
