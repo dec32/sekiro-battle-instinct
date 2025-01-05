@@ -17,8 +17,15 @@ use ::log::{debug, error, trace};
 //
 //----------------------------------------------------------------------------
 
-// behavior
+// MOD behavior
 const INJECTION_DURATION: u8 = 10;
+const WAIT_BEFORE_HOOKING: Duration = Duration::from_secs(10);
+
+// some function pointers
+const PROCESS_INPUT: usize  = 0x140B2C190;
+const GET_ITEM_ID: usize    = 0x140C3D680;
+const SET_SKILL_SLOT: usize = 0x140D592F0;
+const PLAY_UI_SOUND: usize  = 0x1408CE960;
 
 // Combat art UIDs
 const ICHIMONJI: u32 = 5300;
@@ -36,7 +43,7 @@ const SHADOWFALL: u32 = 7600;
 const MORTAL_DRAW: u32 = 5700;
 const EMPOWERED_MORTAL_DRAW: u32 = 7300;
 
-// Action bitfields
+// action bitfields
 const ATTACK: u64 = 0x1;
 const BLOCK: u64 = 0x4;
 #[allow(unused)]
@@ -115,6 +122,7 @@ fn load_dll() -> windows::core::Result<usize> {
 //----------------------------------------------------------------------------
 
 fn chainload(path: &Path) -> Result<()> {
+    // TODO: sort the DLLs by their names so the chainload order can be controlled
     for entry in fs::read_dir(path)?.filter_map(Result::ok) {
         let name = entry.file_name();
         let name_lossy = name.to_string_lossy();
@@ -143,41 +151,160 @@ fn chainload(path: &Path) -> Result<()> {
 //  Actual content of the mod
 //
 //----------------------------------------------------------------------------
-
-static mut PROCESS_INPUT: usize = 0x140B2C190;
-static mut CONFIG: Config = Config::new();
-
 fn modulate(path: &Path) -> Result<()> {
     // hooking will fail (MH_ERROR_UNSUPPORTED_FUNCTION) if it starts too soon
-    thread::sleep(Duration::from_secs(10));
+    thread::sleep(WAIT_BEFORE_HOOKING);
     unsafe {
         // Loading configs
         let path = path.join("battle_instinct.cfg");
-        CONFIG = Config::load(&path)?;
+        MOD.load_config(&path)?;
         // TODO ? operator doesn't work on MinHook
         // Hijack the input processing function
-        PROCESS_INPUT = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).unwrap() as usize; 
+        let orig_ptr = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).unwrap();
+        let orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(orig_ptr);
+        MOD.orig = Some(orig); 
         MinHook::enable_all_hooks().unwrap();
     }
     Ok(())
 }
 
-
 fn process_input(input_handler: *const c_void, arg: usize) -> usize {
-    // Some unholy static mut to track states
-    static mut BUFFER: InputBuffer = InputBuffer::new();
-    static mut BLOCKING_LAST_FRAME: bool = false;
-    static mut ATTACKING_LAST_FRAME: bool = false;
-    static mut INJECTED_FRAMES: u8 = 0;
-    
-    unsafe fn is_key_down(keycode: i32) -> bool {
-        GetKeyState(keycode) as u16 & 0x8000 != 0
+    unsafe { MOD.process_input(input_handler, arg) }
+}
+
+static mut MOD: Mod = Mod::new();
+struct Mod {
+    config: Config,
+    buffer: InputBuffer,
+    blocking_last_frame: bool,
+    attacking_last_frame: bool,
+    injectd_frames: u8,
+    cur_art: u32,
+    // the original process_input function
+    orig: Option<fn(*const c_void, usize) -> usize>,
+}
+
+impl Mod {
+    const fn new() -> Mod {
+        Mod {
+            config: Config::new(),
+            buffer: InputBuffer::new(),
+            blocking_last_frame: false,
+            attacking_last_frame: false,
+            injectd_frames: 0,
+            cur_art: 0,
+            orig: None,
+        }
     }
 
-    #[allow(unreachable_code)]
-    unsafe fn get_joystick_pos() -> Option<(i16, i16)> {
-        // it seems XInputGetState has a performance issue when there's no controller connected
-        static mut COOL_DOWN: u16 = 0;
+    fn load_config(&mut self, path: &Path) -> Result<()>{
+        self.config = Config::load(path)?;
+        Ok(())
+    }
+
+    fn process_input(&mut self, input_handler: *const c_void, arg: usize) -> usize {
+        // If you forget what a bitfield is please refer to Wikipedia
+        let action_bitfield = unsafe{ mem::transmute::<_, &mut u64>(input_handler as usize + 0x10) };
+        let attacking = *action_bitfield & ATTACK != 0;
+        let blocking = *action_bitfield & BLOCK != 0;
+        let attacked_just_now = !self.attacking_last_frame && attacking;
+        let blocked_just_now = !self.blocking_last_frame && blocking;
+        self.attacking_last_frame = attacking;
+        self.blocking_last_frame = blocking;
+
+
+        // TODO when Ashina Cross is equipped, ignore all directional inputs until it is finally performed or aborted
+        // TODO inject backward input for Nightjar Reversal
+
+        let inputs = if let Some((x, y)) = get_joystick_pos() {
+            // trace!("Pos:[{}, {}]", x, y);
+            self.buffer.update_pos(x, y)
+        } else {
+            let up = is_key_down(0x57);
+            let down = is_key_down(0x53);
+            let left = is_key_down(0x41);
+            let right = is_key_down(0x44);
+            self.buffer.update(up, down, left, right)
+        };
+
+        let desired_art = if blocked_just_now && self.buffer.aborted() {
+            // when there're no recent inputs and the block button is just pressed, roll back to the default art
+            // also manually clear the input buffer so the desired art in the next few frames will still be the default art
+            self.buffer.clear(); 
+            self.config.default_art
+        } else {
+            // Switch to the desired combat arts if the player is giving directional inputs
+            self.config.arts.get(&inputs)
+        };
+
+        // equip the desired combat art or the fallback version
+        if let Some(desired_art) = desired_art {
+            self.set_combat_art(desired_art);
+        }
+
+        // quirky inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of quirky walking (who walks like that?)
+        // in such cases, player can perform combat arts without BLOCK button
+
+        // holds the previous injection for several more frames
+        if self.injectd_frames != 0 {
+            *action_bitfield |= BLOCK;
+            self.injectd_frames += 1;
+            if self.injectd_frames >= INJECTION_DURATION {
+                // rollback the injection
+                self.injectd_frames = 0;
+            }
+        }
+        if attacked_just_now && inputs.meant_for_art() && !self.buffer.aborted() {
+            // injection
+            *action_bitfield |= BLOCK;
+            self.injectd_frames += 1;
+        }
+
+        if *action_bitfield != 0 {
+            // trace!("Action: {:016x}", action_bitfield)
+        }
+
+        self.orig.unwrap()(input_handler, arg)
+    }
+
+
+    fn set_combat_art(&mut self, art: u32) {
+        // equipping the same combat art again can unequip the combat art
+        if self.cur_art == art {
+            return;
+        }
+        if set_combat_art(art) {
+            self.cur_art = art;
+            return;
+        }
+
+        let fallback = match art {
+            ICHIMONJI_DOUBLE =>         Some(ICHIMONJI),
+            PRAYING_STRIKES_EXORCISM => Some(PRAYING_STRIKES),
+            HIGH_MONK =>                Some(SENPO_LEAPING_KICKS),
+            SHADOWFALL =>               Some(SHADOWRUSH),
+            EMPOWERED_MORTAL_DRAW =>    Some(MORTAL_DRAW), 
+            _ => None
+        };
+        if let Some(fallback) = fallback {
+            self.set_combat_art(fallback);
+        }
+    }
+}
+
+
+
+//----------------------------------------------------------------------------
+//
+//  Wrappers for Windows APIs
+//
+//----------------------------------------------------------------------------
+
+#[allow(unreachable_code)]
+fn get_joystick_pos() -> Option<(i16, i16)> {
+    // it seems XInputGetState has a performance issue when there's no controller connected
+    static mut COOL_DOWN: u16 = 0;
+    unsafe {
         if COOL_DOWN != 0 {
             COOL_DOWN -= 1;
             return None;
@@ -193,86 +320,12 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
                 .filter(|pos|*pos != (0, 0))
         }
     }
-
-    unsafe {
-        // If you forget what a bitfield is please refer to Wikipedia
-        let action_bitfield = mem::transmute::<_, &mut u64>(input_handler as usize + 0x10);
-        let attacking = *action_bitfield & ATTACK != 0;
-        let blocking = *action_bitfield & BLOCK != 0;
-        let attacked_just_now = !ATTACKING_LAST_FRAME && attacking;
-        let blocked_just_now = !BLOCKING_LAST_FRAME && blocking;
-        ATTACKING_LAST_FRAME = attacking;
-        BLOCKING_LAST_FRAME = blocking;
-
-
-        // TODO when Ashina Cross is equipped, ignore all directional inputs until it is finally performed or aborted
-        // TODO inject backward input for Nightjar Reversal
-
-        let inputs = if let Some((x, y)) = get_joystick_pos() {
-            // trace!("Pos:[{}, {}]", x, y);
-            BUFFER.update_pos(x, y)
-        } else {
-            let up = is_key_down(0x57);
-            let down = is_key_down(0x53);
-            let left = is_key_down(0x41);
-            let right = is_key_down(0x44);
-            BUFFER.update(up, down, left, right)
-        };
-
-        let desired_art = if blocked_just_now && BUFFER.aborted() {
-            // when there're no recent inputs and the block button is just pressed, roll back to the default art
-            // also manually clear the input buffer so the desired art in the next few frames will still be the default art
-            BUFFER.clear(); 
-            CONFIG.default_art
-        } else {
-            // Switch to the desired combat arts if the player is giving directional inputs
-            CONFIG.arts.get(&inputs)
-        };
-
-        // equip the desired combat art or the fallback version
-        if let Some(desired_art) = desired_art {
-            let equipped = set_combat_art(desired_art);
-            if !equipped {
-                // look for possible fallback
-                let fall_back = match desired_art {
-                    ICHIMONJI_DOUBLE =>         Some(ICHIMONJI),
-                    PRAYING_STRIKES_EXORCISM => Some(PRAYING_STRIKES),
-                    HIGH_MONK =>                Some(SENPO_LEAPING_KICKS),
-                    SHADOWFALL =>               Some(SHADOWRUSH),
-                    EMPOWERED_MORTAL_DRAW =>    Some(MORTAL_DRAW), 
-                    _ => None
-                };
-                if let Some(fall_back) = fall_back {
-                    set_combat_art(fall_back);
-                }
-            }
-        }
-
-        // quirky inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of quirky walking (who walks like that?)
-        // in such cases, player can perform combat arts without BLOCK button
-
-        // holds the previous injection for several more frames
-        if INJECTED_FRAMES != 0 {
-            *action_bitfield |= BLOCK;
-            INJECTED_FRAMES += 1;
-            if INJECTED_FRAMES >= INJECTION_DURATION {
-                // rollback the injection
-                INJECTED_FRAMES = 0;
-            }
-        }
-        if attacked_just_now && inputs.meant_for_art() && !BUFFER.aborted() {
-            // injection
-            *action_bitfield |= BLOCK;
-            INJECTED_FRAMES += 1;
-        }
-
-        if *action_bitfield != 0 {
-            // trace!("Action: {:016x}", action_bitfield)
-        }
-    }
-    let f = unsafe{ mem::transmute::<_, fn(*const c_void, usize)->usize>(PROCESS_INPUT) };
-    f(input_handler, arg)
 }
+
+fn is_key_down(keycode: i32) -> bool {
+    unsafe{ GetKeyState(keycode) as u16 & 0x8000 != 0 }
+}
+
 
 
 //----------------------------------------------------------------------------
@@ -282,11 +335,6 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
 //----------------------------------------------------------------------------
 
 fn set_combat_art(uid: u32) -> bool {
-    // equipping the same combat art again can unequip the combat art
-    static mut LAST_UID: u32 = 0;
-    if unsafe { uid == LAST_UID } {
-        return true;
-    }
     // Validate if the player has already obtained the combat art
     // If so, there should be a corresponding item (with an item ID) representing that art
     // The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
@@ -295,13 +343,12 @@ fn set_combat_art(uid: u32) -> bool {
         return false;
     };
     // cast the combat art id to some sort of "equip data" array.
-    static mut EQUIP_DATA: [u32;17] = [0;17];
-    let data_pointer = unsafe {
-        EQUIP_DATA[14] = item_id as u32;
-        EQUIP_DATA.as_ptr()
+    let mut equip_data: [u32;17] = [0;17];
+    let data_pointer = {
+        equip_data[14] = item_id as u32;
+        equip_data.as_ptr()
     };
     _set_skill_slot(1, data_pointer, true);
-    unsafe {LAST_UID = uid}
     trace!("Switched to combat art: {uid}");
     return true;
 }
@@ -347,10 +394,6 @@ fn get_item_id(uid: u32) -> Option<u64> {
 //----------------------------------------------------------------------------
 
 // TODO use some derive macro to clean up this mess
-const GET_ITEM_ID: usize = 0x140C3D680;
-const SET_SKILL_SLOT: usize = 0x140D592F0;
-const PLAY_UI_SOUND: usize = 0x1408CE960;
-
 
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.

@@ -43,7 +43,6 @@ impl InputsExt for Inputs {
 
 /// A input buffer that remembers the most recent 3 directional inputs
 /// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age
-
 pub struct InputBuffer {
     inputs: Inputs,
     holds: [bool; 4],
@@ -87,6 +86,8 @@ impl InputBuffer {
         let distance_square = (x as i32).pow(2) + (y as i32).pow(2);
         let threshold_square = (JOYSTICK_THRESHOLD as i32).pow(2);
         if distance_square < threshold_square {
+            // TODO 检测摇杆是否回到「中立区」时，选择一个偏移过的原点充当距离计算的基准
+            // 缓冲区清空时，再把原点重置
             self.update(false, false, false, false)
         } else {
             let dir = if y.unsigned_abs() >= x.unsigned_abs() {
