@@ -3,8 +3,8 @@ use log::trace;
 use Input::*;
 
 const INPUTS_CAP: usize = 3;
+const BUFFER_MAX_AGE: u8 = 10;
 const JOYSTICK_THRESHOLD: i16 = i16::MAX / 100 * 80;
-const MAX_AGE: u8 = 10;
 
 /// I love type safety and readability.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -77,7 +77,7 @@ impl InputBuffer {
             self.age = 0;
             trace!("Buffer: {:?}", self.inputs);
         } else {
-            self.age = u8::min(self.age + 1, MAX_AGE);
+            self.age = u8::min(self.age + 1, BUFFER_MAX_AGE);
         }
         self.inputs.clone()
     }
@@ -106,7 +106,7 @@ impl InputBuffer {
 
 
     pub fn aborted(&self) -> bool {
-        self.holds == [false, false, false, false] && self.age >= MAX_AGE
+        self.holds == [false, false, false, false] && self.age >= BUFFER_MAX_AGE
     }
 
     pub fn clear(&mut self) {

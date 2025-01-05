@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, thread, time::Duration};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, thread, time::Duration, u8};
 use anyhow::Result;
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
@@ -18,16 +18,19 @@ use ::log::{debug, error, trace};
 //----------------------------------------------------------------------------
 
 // MOD behavior
-const INJECTION_DURATION: u8 = 10;
+const BLOCK_INJECTION_DURATION: u8 = 10;
+const ATTACK_SUPRESSION_DURATION: u8 = 2;
+const XINPUT_DETECTION_INTERVAL: u16 = 300;
 const WAIT_BEFORE_HOOKING: Duration = Duration::from_secs(10);
 
-// some function pointers
+// some function pointers from the original game
 const PROCESS_INPUT: usize  = 0x140B2C190;
-const GET_ITEM_ID: usize    = 0x140C3D680;
+const GET_ITEM_ID: usize = 0x140C3D680;
 const SET_SKILL_SLOT: usize = 0x140D592F0;
-const PLAY_UI_SOUND: usize  = 0x1408CE960;
+const PLAY_UI_SOUND: usize = 0x1408CE960;
 
 // Combat art UIDs
+const ASHINA_CROSS: u32 = 5500;
 const ICHIMONJI: u32 = 5300;
 const ICHIMONJI_DOUBLE: u32 = 7100;
 
@@ -53,7 +56,7 @@ const SWITCH_PROSTHETIC: u64 = 0x400;
 #[allow(unused)]
 const DODGE: u64 = 0x2000;
 #[allow(unused)]
-const USE_PROSTHETIC: u64 = 0x40040002;
+const USE_PROSTHETIC: u64 = 0x40040002; // you sure this is correct?
 
 //----------------------------------------------------------------------------
 //
@@ -172,14 +175,17 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     unsafe { MOD.process_input(input_handler, arg) }
 }
 
+
+// TODO use some cheap try_lock mechanism to gurantee single thread access
 static mut MOD: Mod = Mod::new();
 struct Mod {
     config: Config,
     buffer: InputBuffer,
+    cur_art: u32,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
-    injectd_frames: u8,
-    cur_art: u32,
+    injected_frames: u8,
+    supressed_frames: u8,
     // the original process_input function
     orig: Option<fn(*const c_void, usize) -> usize>,
 }
@@ -191,7 +197,8 @@ impl Mod {
             buffer: InputBuffer::new(),
             blocking_last_frame: false,
             attacking_last_frame: false,
-            injectd_frames: 0,
+            injected_frames: 0,
+            supressed_frames: u8::MAX,
             cur_art: 0,
             orig: None,
         }
@@ -209,13 +216,8 @@ impl Mod {
         let blocking = *action_bitfield & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
-        self.attacking_last_frame = attacking;
-        self.blocking_last_frame = blocking;
-
-
-        // TODO when Ashina Cross is equipped, ignore all directional inputs until it is finally performed or aborted
+        
         // TODO inject backward input for Nightjar Reversal
-
         let inputs = if let Some((x, y)) = get_joystick_pos() {
             // trace!("Pos:[{}, {}]", x, y);
             self.buffer.update_pos(x, y)
@@ -227,7 +229,11 @@ impl Mod {
             self.buffer.update(up, down, left, right)
         };
 
-        let desired_art = if blocked_just_now && self.buffer.aborted() {
+        
+        let desired_art = if self.cur_art == ASHINA_CROSS && attacking {
+            // keep using Ashina Cross when the player is waiting to strike
+            Some(ASHINA_CROSS)
+        } else if blocked_just_now && self.buffer.aborted() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear(); 
@@ -243,27 +249,41 @@ impl Mod {
         }
 
         // quirky inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of quirky walking (who walks like that?)
-        // in such cases, player can perform combat arts without BLOCK button
-
-        // holds the previous injection for several more frames
-        if self.injectd_frames != 0 {
+        // in such cases, players can perform combat arts without pressing BLOCK, because the mod injects the BLOCK action for them
+        if attacked_just_now && inputs.meant_for_art() && !self.buffer.aborted() {
             *action_bitfield |= BLOCK;
-            self.injectd_frames += 1;
-            if self.injectd_frames >= INJECTION_DURATION {
-                // rollback the injection
-                self.injectd_frames = 0;
+            self.injected_frames = 1;
+        } else if self.injected_frames >= 1 { 
+            if self.cur_art == ASHINA_CROSS && attacking {
+                // hold BLOCK for ashina cross as long as ATTACK is also held
+                // until the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
+                if blocking {
+                    self.injected_frames = 0;
+                } else {
+                    *action_bitfield |= BLOCK;
+                }
+            } else if self.injected_frames < BLOCK_INJECTION_DURATION {
+                // inject just a few frames for other art
+                *action_bitfield |= BLOCK;
+                self.injected_frames += 1;
             }
         }
-        if attacked_just_now && inputs.meant_for_art() && !self.buffer.aborted() {
-            // injection
-            *action_bitfield |= BLOCK;
-            self.injectd_frames += 1;
+
+        // if ATTACK|BLOCK happens way too quick after combat art switching
+        // Wirdwind Slash will be performed instead of the just equipped combat art
+        // supressing the few ATTACK frames that happens right after combat art switching solves the bug
+        if self.supressed_frames < ATTACK_SUPRESSION_DURATION {
+            trace!("Attacking frame supressed.");
+            *action_bitfield &= !ATTACK;
+            self.supressed_frames += 1;
         }
 
         if *action_bitfield != 0 {
-            // trace!("Action: {:016x}", action_bitfield)
+            trace!("Action: {:016x}", action_bitfield)
         }
 
+        self.attacking_last_frame = attacking;
+        self.blocking_last_frame = blocking;
         self.orig.unwrap()(input_handler, arg)
     }
 
@@ -275,6 +295,7 @@ impl Mod {
         }
         if set_combat_art(art) {
             self.cur_art = art;
+            self.supressed_frames = 0;
             return;
         }
 
@@ -303,6 +324,7 @@ impl Mod {
 #[allow(unreachable_code)]
 fn get_joystick_pos() -> Option<(i16, i16)> {
     // it seems XInputGetState has a performance issue when there's no controller connected
+    // TODO this is still not optimal
     static mut COOL_DOWN: u16 = 0;
     unsafe {
         if COOL_DOWN != 0 {
@@ -312,7 +334,7 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
         let mut xinput_state = mem::zeroed();
         let res = XInputGetState(0, &mut xinput_state);
         if res != ERROR_SUCCESS.0 {
-            COOL_DOWN = 300;
+            COOL_DOWN = XINPUT_DETECTION_INTERVAL;
             None
         } else {
             // (0, 0) is filtered out so that I can test the keyboard while the controller is still plugged in
