@@ -15,8 +15,9 @@ To install the MOD, simply unzip the archive into the game directory (usually `C
 1. `dinput8.dll`
 2. `battle_instinct.cfg`
 
+## Solve `dinput8.dll` Conflict
 
-If the game is already modded with MOD Engine or any other MOD that utilizes `dinput8.dll`. You can rename the **other** `.dll` files into `dinput8_{whatever_you_like}.dll`. The MOD will automatically chain load the renamed `.dll` files for you. For example you may have:
+If you have MOD Engine or any other MOD that utilizes `dinput8.dll` installed, rename the **other** `dinput8.dll` files to `dinput8_{whatever_you_like}.dll`. For example you may have:
 
 ```
 Sekiro/
@@ -27,7 +28,10 @@ Sekiro/
 ├─ sekiro.exe
 ├─ ...
 ```
+The MOD will automatically chain loads the renamed `dinput8.dll` files for you.
 
+> [!TIP]
+> [Lazy Loader](https://www.nexusmods.com/darksouls3/mods/677) and editing `modengine.ini` are also possible solutions.
 
 
 ## Use
@@ -36,7 +40,7 @@ Press <kbd>Block</kbd> + <kbd>Attack</kbd> to perform the default combat art.
 
 ![](./docs/combat_art_0.webp)
 
-**Hold** a direction input while pressing <kbd>Block</kbd> + <kbd>Attack</kbd> performs the combat art that is bind to that direction. This is similar to how you perform Nightjar Slash Reversal in the vanilla game.
+**Hold** a directional input and pressing <kbd>Block</kbd> + <kbd>Attack</kbd> performs the combat art bound to that direction. This is similar to how you perform Nightjar Slash Reversal in the vanilla game.
 
 ![](./docs/combat_art_1.webp)
 
@@ -44,7 +48,7 @@ You can also **release** the input and press <kbd>Block</kbd> + <kbd>Attack</kbd
 
 ![](./docs/combat_art_2.webp)
 
-A combat art can be bind to multiple direction inputs. When performing such combat arts. <kbd>Block</kbd> can be omitted.
+A combat art can also be bound to a sequence of directional inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted.
 
 ![](./docs/combat_art_3.webp)
 
@@ -67,5 +71,7 @@ The first row of the table are the UIDs of the combat arts. Do NOT modify them. 
 3. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding directional inputs.
 
 > [!NOTE] 
-> Binding two **adjecent** direction inputs (such as `↑→`) to a combat art is not recommended because you use these kind inputs to walk around.
+> Binding two **adjecent** direction inputs (such as `↑→`) to a combat art is not recommended because you use these kind inputs to walk around. 
+>
+> The <kbd>Block</kbd> omittion feature also won't work on combat arts configured this way or else the MOD won't be able to differentiate between "walk then attack" and "perform combat arts".
 
