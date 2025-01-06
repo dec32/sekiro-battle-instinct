@@ -58,7 +58,8 @@ impl InputsExt for Inputs {
 pub struct InputBuffer {
     inputs: Inputs,
     keys_down: [bool; 4],
-    age: u8,
+    neutral: bool,
+    frames: u8,
 }
 
 impl InputBuffer {
@@ -66,37 +67,30 @@ impl InputBuffer {
         InputBuffer {
             inputs: Inputs::new_const(),
             keys_down: [false; 4],
-            age: 0
+            neutral: true,
+            frames: 0
         }
     }
 
     // TODO it should tell its caller if the inputs are expired or not
-    pub fn update(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
+    pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
         for (i, key) in [up, right, down, left].iter().cloned().enumerate() {
             if !self.keys_down[i] && key {
                 // newly pressed direction
-                if self.inputs.len() >= self.inputs.capacity() || self.age > MAX_INTERVAL {
-                    self.inputs.clear();
-                }
-                self.inputs.push(Input::from(i));
+                self.push(Input::from(i));
                 updated = true;
             }
             self.keys_down[i] = key;
         }
-
-        if updated {
-            self.age = 0;
-            trace!("Buffer: {:?}", self.inputs);
-        } else {
-            self.age = self.age.saturating_add(1);
-        }
+        self.incr_frames(updated);
         self.inputs.clone()
     }
 
-    pub fn update_pos(&mut self, x: i16, y: i16) -> Inputs {
+    pub fn update_joystick(&mut self, x: i16, y: i16) -> Inputs {
+        let mut updated = false;
         let x_abs = x.unsigned_abs();
-        let y_abs: u16 = y.unsigned_abs();
+        let y_abs = y.unsigned_abs();
 
         let input = if y_abs >= x_abs {
             if y > 0 { Up } else { Down }
@@ -106,40 +100,51 @@ impl InputBuffer {
 
         // using chebyshev distance means we have a square-shaped dead zone
         let chebyshev_distance = u16::max(x_abs, y_abs);
-        let threshold = match self.inputs.last().cloned() {
-            Some(last) => {
-                if input == last.opposite() {
-                    // this makes inputs like [Up, Down] or [Left, Right] a bit easier
-                    JOYSTICK_BOUNCE_THRESHOLD
-                } else {
-                    JOYSTICK_THRESHOLD
-                }
-            }
-            None => JOYSTICK_THRESHOLD
+        let threshold = if self.inputs.last().into_iter().any(|last|input == last.opposite()) {
+            // This makes bouncing inputs (↑↓, ↓↑, ←→, →←) easier to perform
+            JOYSTICK_BOUNCE_THRESHOLD
+        } else {
+            JOYSTICK_THRESHOLD
         };
 
-        if chebyshev_distance < threshold as u16 {
-            self.update(false, false, false, false)
+        if chebyshev_distance < threshold {
+            self.neutral = true;
         } else {
-            // if matches!(chebyshev_distance, JOYSTICK_BOUNCE_THRESHOLD..=JOYSTICK_THRESHOLD) {
-            //     trace!("Lazy bouncing happend")
-            // }
-            match input {
-                Up => self.update(true, false, false, false),
-                Right => self.update(false, true, false, false),
-                Down => self.update(false, false, true, false),
-                Left => self.update(false, false, false, true),
+            // direction change
+            if self.neutral || self.inputs.last().into_iter().any(|last|input != *last) {
+                self.push(input);
+                updated = true;
             }
+            self.neutral = false;
+        }
+
+        self.incr_frames(updated);
+        self.inputs.clone()
+    }
+
+    fn push(&mut self, input: Input) {
+        if self.inputs.len() >= self.inputs.capacity() || self.frames > MAX_INTERVAL {
+            self.inputs.clear();
+        }
+        self.inputs.push(input);
+    }
+
+    fn incr_frames(&mut self, updated: bool) {
+        if updated {
+            self.frames = 0;
+            trace!("Buffer: {:?}", self.inputs);
+        } else {
+            self.frames = self.frames.saturating_add(1);
         }
     }
 
     pub fn aborted(&self) -> bool {
-        self.keys_down == [false, false, false, false] && self.age >= MAX_ATTACK_DELAY
+        self.keys_down == [false, false, false, false] && self.neutral && self.frames >= MAX_ATTACK_DELAY
     }
 
     pub fn clear(&mut self) {
         self.inputs.clear();
-        self.age = 0;
+        self.frames = 0;
     }
 }
 

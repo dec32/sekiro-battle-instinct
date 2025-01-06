@@ -225,13 +225,13 @@ impl Mod {
         
         // TODO inject backward action for Nightjar Reversal
         let inputs = if let Some((x, y)) = get_joystick_pos() {
-            self.buffer.update_pos(x, y)
+            self.buffer.update_joystick(x, y)
         } else {
             let up = is_key_down(VK_W);
             let right = is_key_down(VK_D);
             let down = is_key_down(VK_S);
             let left = is_key_down(VK_A);
-            self.buffer.update(up, right, down, left)
+            self.buffer.update_keys(up, right, down, left)
         };
 
         let desired_art = if self.cur_art == ASHINA_CROSS && attacking {
