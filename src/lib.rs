@@ -224,7 +224,8 @@ impl Mod {
         let blocked_just_now = !self.blocking_last_frame && blocking;
         
         // TODO inject backward action for Nightjar Reversal
-        let inputs = if let Some((x, y)) = get_joystick_pos() {
+        // (0, 0) is filtered out so I can test the keyboard while the controller is still plugged in
+        let inputs = if let Some((x, y)) = get_joystick_pos().filter(|pos|*pos != (0, 0)) {
             self.buffer.update_joystick(x, y)
         } else {
             let up = is_key_down(VK_W);
@@ -340,9 +341,7 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
             COUNTDOWN = XINPUT_RETRY_INTERVAL;
             None
         } else {
-            // (0, 0) is filtered out so that I can test the keyboard while the controller is still plugged in
             Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
-                .filter(|pos|*pos != (0, 0))
         }
     }
 }
