@@ -11,25 +11,29 @@ const JOYSTICK_BOUNCE_THRESHOLD: u16 = (i16::MAX / 100 * 50) as u16;
 /// I love type safety and readability.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Input {
-    Up    = 1, 
-    Right = 2,
-    Down  = 3, 
-    Left  = 4, 
+    Up    = 0, 
+    Right = 1,
+    Down  = 2, 
+    Left  = 3, 
 }
 
 impl Input {
     fn opposite(self) -> Input {
-        Input::from((self as usize + 2) % 4 + 1).into()
+        Input::from((self as usize + 2) % 4)
+    }
+    
+    fn quinary_digit(self) -> usize {
+        self as usize + 1
     }
 }
 
 impl From<usize> for Input {
     fn from(value: usize) -> Self {
         match value {
-            1 => Up,
-            2 => Right,
-            3 => Down,
-            4 => Left,
+            0 => Up,
+            1 => Right,
+            2 => Down,
+            3 => Left,
             _ => panic!("If you see this message, the programmer of this MOD is an idiot.")
         }
     }
@@ -53,7 +57,7 @@ impl InputsExt for Inputs {
 /// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age
 pub struct InputBuffer {
     inputs: Inputs,
-    holds: [bool; 4],
+    keys_down: [bool; 4],
     age: u8,
 }
 
@@ -61,7 +65,7 @@ impl InputBuffer {
     pub const fn new() -> InputBuffer {
         InputBuffer {
             inputs: Inputs::new_const(),
-            holds: [false; 4],
+            keys_down: [false; 4],
             age: 0
         }
     }
@@ -69,16 +73,16 @@ impl InputBuffer {
     // TODO it should tell its caller if the inputs are expired or not
     pub fn update(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
-        for (i, hold) in [up, right, down, left].iter().cloned().enumerate() {
-            if !self.holds[i] && hold {
+        for (i, key) in [up, right, down, left].iter().cloned().enumerate() {
+            if !self.keys_down[i] && key {
                 // newly pressed direction
                 if self.inputs.len() >= self.inputs.capacity() || self.age > MAX_INTERVAL {
                     self.inputs.clear();
                 }
-                self.inputs.push(Input::from(i + 1));
+                self.inputs.push(Input::from(i));
                 updated = true;
             }
-            self.holds[i] = hold;
+            self.keys_down[i] = key;
         }
 
         if updated {
@@ -129,9 +133,8 @@ impl InputBuffer {
         }
     }
 
-
     pub fn aborted(&self) -> bool {
-        self.holds == [false, false, false, false] && self.age >= MAX_ATTACK_DELAY
+        self.keys_down == [false, false, false, false] && self.age >= MAX_ATTACK_DELAY
     }
 
     pub fn clear(&mut self) {
@@ -163,9 +166,10 @@ impl <T:Copy>InputsTrie<T> {
 
     fn idx(inputs: &[Input]) -> usize {
         // cast the input sequence into a base-5 number
+        const BASE: usize = 5;
         let mut idx = 0;
         for (i, input) in inputs.iter().cloned().take(INPUTS_CAP).enumerate() {
-            idx += input as usize * usize::pow(5, i as u32);
+            idx += input.quinary_digit() * BASE.pow(i.try_into().unwrap());
         }
         idx
     }
