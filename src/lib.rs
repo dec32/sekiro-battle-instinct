@@ -3,11 +3,11 @@ mod input;
 mod config;
 
 use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, thread, time::Duration, u8};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
-use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, ERROR_SUCCESS, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::{KeyboardAndMouse::GetKeyState, XboxController::XInputGetState}}};
+use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, ERROR_SUCCESS, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}}};
 use ::log::{debug, error, trace};
 
 
@@ -18,10 +18,10 @@ use ::log::{debug, error, trace};
 //----------------------------------------------------------------------------
 
 // MOD behavior
+const HOOK_DELAY: Duration = Duration::from_secs(10);
+const XINPUT_RETRY_INTERVAL: u16 = 300;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
-const XINPUT_DETECTION_INTERVAL: u16 = 300;
-const WAIT_BEFORE_HOOKING: Duration = Duration::from_secs(10);
 
 // some function pointers from the original game
 const PROCESS_INPUT: usize  = 0x140B2C190;
@@ -75,7 +75,7 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
         thread::spawn(move ||{
             let dir_path = dll_path.parent().unwrap();
             chainload(dir_path).inspect_err(|e|error!("Failed to chainload other dinput8.dll files. {e}")).ok();
-            modulate(dir_path).inspect_err(|e|error!("Errored occured when initializing. {e}")).ok();
+            modulate(dir_path).inspect_err(|e|error!("Errored occured when modulating. {e}")).ok();
         });
     }
     true
@@ -125,7 +125,7 @@ fn load_dll() -> windows::core::Result<usize> {
 //----------------------------------------------------------------------------
 
 fn chainload(path: &Path) -> Result<()> {
-    // TODO: sort the DLLs by their names so the chainload order can be controlled
+    let mut names = Vec::new();
     for entry in fs::read_dir(path)?.filter_map(Result::ok) {
         let name = entry.file_name();
         let name_lossy = name.to_string_lossy();
@@ -136,13 +136,18 @@ fn chainload(path: &Path) -> Result<()> {
         if !name_lossy.ends_with(".dll") {
             continue;
         }
-        // Load the DLL
+        names.push(name);
+    }
+    // Load the DLL by the order of names so that players can use names like
+    // dinput8_1_xxx.dll, dinput8_2_xxx.dll to determine chainload order
+    names.sort();
+    for name in names {
         let path = path.join(&name);
         let path = path.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
         unsafe {
             LoadLibraryW(PCWSTR::from_raw(path.as_ptr()))?;
         }
-        debug!("Chainloaded dll: {name_lossy}");
+        debug!("Chainloaded dll: {name:?}");
     }
     Ok(())
 }
@@ -154,17 +159,21 @@ fn chainload(path: &Path) -> Result<()> {
 //  Actual content of the mod
 //
 //----------------------------------------------------------------------------
+
+// TODO use some cheap try_lock mechanism to gurantee single thread access
+static mut MOD: Mod = Mod::new();
+
 fn modulate(path: &Path) -> Result<()> {
-    // hooking will fail (MH_ERROR_UNSUPPORTED_FUNCTION) if it starts too soon
-    thread::sleep(WAIT_BEFORE_HOOKING);
+    // hooking fails (MH_ERROR_UNSUPPORTED_FUNCTION) if it starts too soon
+    thread::sleep(HOOK_DELAY);
     unsafe {
         // Loading configs
         let path = path.join("battle_instinct.cfg");
         MOD.load_config(&path)?;
-        // TODO ? operator doesn't work on MinHook
         // Hijack the input processing function
-        let orig_ptr = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).unwrap();
-        let orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(orig_ptr);
+        let orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
+            .map_err(|e|anyhow!("{e:?}"))?;
+        let orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(orig);
         MOD.orig = Some(orig); 
         MinHook::enable_all_hooks().unwrap();
     }
@@ -175,9 +184,6 @@ fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     unsafe { MOD.process_input(input_handler, arg) }
 }
 
-
-// TODO use some cheap try_lock mechanism to gurantee single thread access
-static mut MOD: Mod = Mod::new();
 struct Mod {
     config: Config,
     buffer: InputBuffer,
@@ -217,19 +223,17 @@ impl Mod {
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
         
-        // TODO inject backward input for Nightjar Reversal
+        // TODO inject backward action for Nightjar Reversal
         let inputs = if let Some((x, y)) = get_joystick_pos() {
-            // trace!("Pos:[{}, {}]", x, y);
             self.buffer.update_pos(x, y)
         } else {
-            let up = is_key_down(0x57);
-            let down = is_key_down(0x53);
-            let left = is_key_down(0x41);
-            let right = is_key_down(0x44);
-            self.buffer.update(up, down, left, right)
+            let up = is_key_down(VK_W);
+            let right = is_key_down(VK_D);
+            let down = is_key_down(VK_S);
+            let left = is_key_down(VK_A);
+            self.buffer.update(up, right, down, left)
         };
 
-        
         let desired_art = if self.cur_art == ASHINA_CROSS && attacking {
             // keep using Ashina Cross when the player is waiting to strike
             Some(ASHINA_CROSS)
@@ -273,7 +277,6 @@ impl Mod {
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
         if self.supressed_frames < ATTACK_SUPRESSION_DURATION {
-            trace!("Attacking frame supressed.");
             *action_bitfield &= !ATTACK;
             self.supressed_frames += 1;
         }
@@ -323,18 +326,18 @@ impl Mod {
 
 #[allow(unreachable_code)]
 fn get_joystick_pos() -> Option<(i16, i16)> {
-    // it seems XInputGetState has a performance issue when there's no controller connected
-    // TODO this is still not optimal
-    static mut COOL_DOWN: u16 = 0;
+    // checking a disconnected controller slot requires device enumeration, which can be a performance hit
+    // TODO where to put this COUNTDOWN variable?
+    static mut COUNTDOWN: u16 = 0;
     unsafe {
-        if COOL_DOWN != 0 {
-            COOL_DOWN -= 1;
+        if COUNTDOWN > 0 {
+            COUNTDOWN -= 1;
             return None;
         }
         let mut xinput_state = mem::zeroed();
         let res = XInputGetState(0, &mut xinput_state);
         if res != ERROR_SUCCESS.0 {
-            COOL_DOWN = XINPUT_DETECTION_INTERVAL;
+            COUNTDOWN = XINPUT_RETRY_INTERVAL;
             None
         } else {
             // (0, 0) is filtered out so that I can test the keyboard while the controller is still plugged in
@@ -344,8 +347,8 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
     }
 }
 
-fn is_key_down(keycode: i32) -> bool {
-    unsafe{ GetKeyState(keycode) as u16 & 0x8000 != 0 }
+fn is_key_down(keycode: VIRTUAL_KEY) -> bool {
+    unsafe{ GetKeyState(keycode.0.into()) as u16 & 0x8000 != 0 }
 }
 
 
@@ -415,7 +418,6 @@ fn get_item_id(uid: u32) -> Option<u64> {
 //
 //----------------------------------------------------------------------------
 
-// TODO use some derive macro to clean up this mess
 
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.

@@ -3,26 +3,34 @@ use log::trace;
 use Input::*;
 
 const INPUTS_CAP: usize = 3;
-const BUFFER_MAX_AGE: u8 = 10;
-const JOYSTICK_THRESHOLD: i16 = i16::MAX / 100 * 80;
+const MAX_INTERVAL: u8 = 20;
+const MAX_ATTACK_DELAY: u8 = 10;
+const JOYSTICK_THRESHOLD: u16 = (i16::MAX / 100 * 80) as u16;
+const JOYSTICK_BOUNCE_THRESHOLD: u16 = (i16::MAX / 100 * 50) as u16;
 
 /// I love type safety and readability.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Input {
-    Up = 1, 
-    Down = 2, 
-    Left = 3, 
-    Right = 4 
+    Up    = 1, 
+    Right = 2,
+    Down  = 3, 
+    Left  = 4, 
+}
+
+impl Input {
+    fn opposite(self) -> Input {
+        Input::from((self as usize + 2) % 4 + 1).into()
+    }
 }
 
 impl From<usize> for Input {
     fn from(value: usize) -> Self {
         match value {
             1 => Up,
-            2 => Down,
-            3 => Left,
-            4 => Right,
-            _ => panic!("You idiot you shouldn't mess up such simple thing.")
+            2 => Right,
+            3 => Down,
+            4 => Left,
+            _ => panic!("If you see this message, the programmer of this MOD is an idiot.")
         }
     }
 }
@@ -58,13 +66,13 @@ impl InputBuffer {
         }
     }
 
-    // TODO it should NOT expose outdated buffer to the outside
-    pub fn update(&mut self, up: bool, down: bool, left: bool, right: bool) -> Inputs {
+    // TODO it should tell its caller if the inputs are expired or not
+    pub fn update(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
-        for (i, hold) in [up, down, left, right].iter().cloned().enumerate() {
+        for (i, hold) in [up, right, down, left].iter().cloned().enumerate() {
             if !self.holds[i] && hold {
                 // newly pressed direction
-                if self.inputs.len() >= self.inputs.capacity() || self.aborted() {
+                if self.inputs.len() >= self.inputs.capacity() || self.age > MAX_INTERVAL {
                     self.inputs.clear();
                 }
                 self.inputs.push(Input::from(i + 1));
@@ -77,36 +85,53 @@ impl InputBuffer {
             self.age = 0;
             trace!("Buffer: {:?}", self.inputs);
         } else {
-            self.age = u8::min(self.age + 1, BUFFER_MAX_AGE);
+            self.age = self.age.saturating_add(1);
         }
         self.inputs.clone()
     }
 
     pub fn update_pos(&mut self, x: i16, y: i16) -> Inputs {
-        let distance_square = (x as i32).pow(2) + (y as i32).pow(2);
-        let threshold_square = (JOYSTICK_THRESHOLD as i32).pow(2);
-        if distance_square < threshold_square {
-            // TODO 检测摇杆是否回到「中立区」时，选择一个偏移过的原点充当距离计算的基准
-            // 缓冲区清空时，再把原点重置
+        let x_abs = x.unsigned_abs();
+        let y_abs: u16 = y.unsigned_abs();
+
+        let input = if y_abs >= x_abs {
+            if y > 0 { Up } else { Down }
+        } else {
+            if x > 0 { Right } else { Left } 
+        };
+
+        // using chebyshev distance means we have a square-shaped dead zone
+        let chebyshev_distance = u16::max(x_abs, y_abs);
+        let threshold = match self.inputs.last().cloned() {
+            Some(last) => {
+                if input == last.opposite() {
+                    // this makes inputs like [Up, Down] or [Left, Right] a bit easier
+                    JOYSTICK_BOUNCE_THRESHOLD
+                } else {
+                    JOYSTICK_THRESHOLD
+                }
+            }
+            None => JOYSTICK_THRESHOLD
+        };
+
+        if chebyshev_distance < threshold as u16 {
             self.update(false, false, false, false)
         } else {
-            let dir = if y.unsigned_abs() >= x.unsigned_abs() {
-                if y > 0 { Up } else { Down }
-            } else {
-                if x > 0 { Right } else { Left } 
-            };
-            match dir {
+            // if matches!(chebyshev_distance, JOYSTICK_BOUNCE_THRESHOLD..=JOYSTICK_THRESHOLD) {
+            //     trace!("Lazy bouncing happend")
+            // }
+            match input {
                 Up => self.update(true, false, false, false),
-                Down => self.update(false, true, false, false),
-                Left => self.update(false, false, true, false),
-                Right => self.update(false, false, false, true),
+                Right => self.update(false, true, false, false),
+                Down => self.update(false, false, true, false),
+                Left => self.update(false, false, false, true),
             }
         }
     }
 
 
     pub fn aborted(&self) -> bool {
-        self.holds == [false, false, false, false] && self.age >= BUFFER_MAX_AGE
+        self.holds == [false, false, false, false] && self.age >= MAX_ATTACK_DELAY
     }
 
     pub fn clear(&mut self) {
