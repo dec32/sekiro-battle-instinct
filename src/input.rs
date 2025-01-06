@@ -75,13 +75,13 @@ impl InputBuffer {
     // TODO it should tell its caller if the inputs are expired or not
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
-        for (i, key) in [up, right, down, left].iter().cloned().enumerate() {
-            if !self.keys_down[i] && key {
+        for (i, down) in [up, right, down, left].iter().cloned().enumerate() {
+            if !self.keys_down[i] && down {
                 // newly pressed direction
                 self.push(Input::from(i));
                 updated = true;
             }
-            self.keys_down[i] = key;
+            self.keys_down[i] = down;
         }
         self.incr_frames(updated);
         self.inputs.clone()
