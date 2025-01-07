@@ -71,7 +71,5 @@ The file is a plain text table formatted with space characters. The first column
 The columns in between store the names of the combat arts. They're only there for reference. Feel free to modify or delete them.
 
 > [!NOTE] 
-> Binding two **adjecent** directional inputs (such as `↑→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements. 
->
-> The <kbd>Block</kbd> omittion feature also won't work on combat arts configured this way because the MOD needs to differentiate between "move then attack" and "perform combat arts".
+> Binding two **adjecent** directional inputs (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements. 
 
