@@ -5,9 +5,9 @@ use Input::*;
 const INPUTS_CAP: usize = 3;
 const MAX_INTERVAL: u8 = 20;
 const MAX_ATTACK_DELAY: u8 = 10;
-const JOYSTICK_THRESHOLD: u16 = (i16::MAX / 100 * 80) as u16;
-const JOYSTICK_ROTATE_THRESHOLD: u16 = (i16::MAX / 100 * 90) as u16;
-const JOYSTICK_BOUNCE_THRESHOLD: u16 = (i16::MAX / 100 * 50) as u16;
+const JOYSTICK_THRESHOLD: u16 = i16::MAX as u16 / 100 * 80;
+const JOYSTICK_ROTATE_THRESHOLD: u16 = i16::MAX as u16 / 100 * 90;
+const JOYSTICK_BOUNCE_THRESHOLD: u16 = i16::MAX as u16 / 100 * 50;
 
 /// I love type safety and readability.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -100,7 +100,9 @@ impl InputBuffer {
         // using chebyshev distance means we have a square-shaped dead zone
         let chebyshev_distance = u16::max(x_abs, y_abs);
         let threshold = if let Some(last) = self.inputs.last().cloned() {
-            if input == last.opposite() {
+            if input == last {
+                JOYSTICK_THRESHOLD
+            } else if input == last.opposite() {
                 // makes bouncing inputs (↑↓, ↓↑, ←→, →←) easier to perform
                 JOYSTICK_BOUNCE_THRESHOLD
             } else {
