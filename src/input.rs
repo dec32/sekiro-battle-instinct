@@ -52,7 +52,7 @@ impl InputsExt for Inputs {
     }
 }
 
-/// A input buffer that remembers the most recent 3 directional inputs
+/// A input buffer that remembers the most recent 3 motion inputs
 /// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age
 pub struct InputBuffer {
     inputs: Inputs,
@@ -76,7 +76,7 @@ impl InputBuffer {
         let mut updated = false;
         for (i, down) in [up, right, down, left].iter().cloned().enumerate() {
             if !self.keys_down[i] && down {
-                // newly pressed direction
+                // newly pressed key
                 self.push(Input::from(i));
                 updated = true;
             }

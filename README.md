@@ -1,6 +1,6 @@
 # Battle Instinct
 
-Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to perform multiple combat arts using directional inputs.
+Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to perform multiple combat arts using motion inputs.
 
 The MOD supports both MNK and gamepads.
 
@@ -37,7 +37,7 @@ Press <kbd>Block</kbd> + <kbd>Attack</kbd> to perform the default combat art.
 
 ![](./docs/combat_art_0.webp)
 
-**Hold** a directional input and pressing <kbd>Block</kbd> + <kbd>Attack</kbd> performs the combat art bound to that direction. This is similar to how you perform Nightjar Slash Reversal in the vanilla game.
+**Hold** a motion input and pressing <kbd>Block</kbd> + <kbd>Attack</kbd> performs the combat art bound to that direction. This is similar to how you perform Nightjar Slash Reversal in the vanilla game.
 
 ![](./docs/combat_art_1.webp)
 
@@ -45,7 +45,7 @@ You can also **release** the input and press <kbd>Block</kbd> + <kbd>Attack</kbd
 
 ![](./docs/combat_art_2.webp)
 
-A combat art can also be bound to a sequence of directional inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted.
+A combat art can also be bound a sequence of motion inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted.
 
 ![](./docs/combat_art_3.webp)
 
@@ -66,10 +66,10 @@ The file is a plain text table formatted with space characters. The first column
 
 1. Nothing, which means this combat art is ignored.
 2. `∅`, which means this is the default combat art.
-3. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding directional inputs.
+3. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding motion inputs.
 
 The columns in between store the names of the combat arts. They're only there for reference. Feel free to modify or delete them.
 
 > [!NOTE] 
-> Binding two **adjecent** directional inputs (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements. 
+> Binding two **adjecent** directions (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements. 
 

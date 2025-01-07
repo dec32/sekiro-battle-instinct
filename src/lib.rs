@@ -244,7 +244,7 @@ impl Mod {
             self.buffer.clear(); 
             self.config.default_art
         } else {
-            // Switch to the desired combat arts if the player is giving directional inputs
+            // Switch to the desired combat arts if the player is giving motion inputs
             self.config.arts.get(&inputs)
         };
 
