@@ -48,11 +48,9 @@ pub trait InputsExt {
 }
 impl InputsExt for Inputs {
     fn meant_for_art(&self) -> bool {
-        self.len() >= 3 || matches!(self.as_slice(), [Up, Up] | [Down, Down] | [Left, Left] | [Right, Right] | [Up, Down] | [Down, Up] | [Left, Right] | [Right, Left])
+        self.len() >= 2
     }
 }
-
-
 
 /// A input buffer that remembers the most recent 3 directional inputs
 /// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age

@@ -253,7 +253,7 @@ impl Mod {
             self.set_combat_art(desired_art);
         }
 
-        // quirky inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of quirky walking (who walks like that?)
+        // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK, because the mod injects the BLOCK action for them
         if attacked_just_now && inputs.meant_for_art() && !self.buffer.aborted() {
             *action_bitfield |= BLOCK;
