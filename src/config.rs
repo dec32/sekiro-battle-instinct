@@ -59,13 +59,27 @@ impl Config {
                 if inputs.len() == 0 {
                     continue;
                 }
-                // Optimize the experience a bit
+                // fault tolerance for keyboards
+                // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
                 if inputs.len() >= 2 {
                     let mut reversed = Inputs::new();
                     reversed.push(inputs[1]);
                     reversed.push(inputs[0]);
-                    if config.arts.get(&reversed).is_none() {
-                        config.arts.insert(reversed, id);
+                }
+                // fault tolerance for joysticks. 
+                // example: if ↑↓ is used while ↑→↓ is not, treat ↑→↓ as ↑↓ so that players won't accidentally do semicircles
+                if inputs.len() == 2 && inputs[0] == inputs[1].opposite() {
+                    for fault in [Up, Right, Down, Left] {
+                        if fault == inputs[0] || fault == inputs[1] {
+                            continue;
+                        }
+                        let mut semicircle = Inputs::new();
+                        semicircle.push(inputs[0]);
+                        semicircle.push(fault);
+                        semicircle.push(inputs[1]);
+                        if config.arts.get(&semicircle).is_none() {
+                            config.arts.insert(semicircle, id);
+                        }
                     }
                 }
                 config.arts.insert(inputs, id);

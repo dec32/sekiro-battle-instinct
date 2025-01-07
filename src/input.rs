@@ -6,6 +6,7 @@ const INPUTS_CAP: usize = 3;
 const MAX_INTERVAL: u8 = 20;
 const MAX_ATTACK_DELAY: u8 = 10;
 const JOYSTICK_THRESHOLD: u16 = (i16::MAX / 100 * 80) as u16;
+const JOYSTICK_ROTATE_THRESHOLD: u16 = (i16::MAX / 100 * 90) as u16;
 const JOYSTICK_BOUNCE_THRESHOLD: u16 = (i16::MAX / 100 * 50) as u16;
 
 /// I love type safety and readability.
@@ -18,7 +19,7 @@ pub enum Input {
 }
 
 impl Input {
-    fn opposite(self) -> Input {
+    pub fn opposite(self) -> Input {
         Input::from((self as usize + 2) % 4)
     }
     
@@ -68,7 +69,7 @@ impl InputBuffer {
             inputs: Inputs::new_const(),
             keys_down: [false; 4],
             neutral: true,
-            frames: 0
+            frames: 0,
         }
     }
 
@@ -100,9 +101,14 @@ impl InputBuffer {
 
         // using chebyshev distance means we have a square-shaped dead zone
         let chebyshev_distance = u16::max(x_abs, y_abs);
-        let threshold = if self.inputs.last().into_iter().any(|last|input == last.opposite()) {
-            // This makes bouncing inputs (↑↓, ↓↑, ←→, →←) easier to perform
-            JOYSTICK_BOUNCE_THRESHOLD
+        let threshold = if let Some(last) = self.inputs.last().cloned() {
+            if input == last.opposite() {
+                // makes bouncing inputs (↑↓, ↓↑, ←→, →←) easier to perform
+                JOYSTICK_BOUNCE_THRESHOLD
+            } else {
+                // makes rotating inputs (↑→, →↓, ↓←, ←↑) HARDER to perform
+                JOYSTICK_ROTATE_THRESHOLD
+            }
         } else {
             JOYSTICK_THRESHOLD
         };
