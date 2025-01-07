@@ -2,7 +2,7 @@
 
 Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to perform multiple combat arts using directional inputs.
 
-The MOD supports both keyboard & mouse and game controllers.
+The MOD supports both MNK and gamepads.
 
 ## Install
 
@@ -28,10 +28,7 @@ Sekiro/
 ├─ sekiro.exe
 ├─ ...
 ```
-The MOD will automatically chain loads the renamed `dinput8.dll` files for you.
-
-> [!TIP]
-> [Lazy Loader](https://www.nexusmods.com/darksouls3/mods/677) and editing `modengine.ini` are also possible solutions.
+The MOD will automatically chain load the renamed `.dll` files for you.
 
 
 ## Use
@@ -55,7 +52,8 @@ A combat art can also be bound to a sequence of directional inputs. When perform
 
 ## Customize
 
-The MOD comes with a configuration file that looks like this:
+You can customize your control scheme by editing `battle_instinct.cfg`. Here's a short example:
+
 ```
 # This is a line of comment
 5300  Ichimonji
@@ -64,14 +62,16 @@ The MOD comes with a configuration file that looks like this:
 7600  Shadowfall        ↑↑
 ```
 
-The first row of the table are the UIDs of the combat arts. Do NOT modify them. The last row specifies how you perform the combat arts. In the last row you can write:
+The file is a plain text table formatted with space characters. The first column stores the UIDs of the combat arts and the last column specifies how you perform the combat arts. In the last column you can write:
 
 1. Nothing, which means this combat art is ignored.
 2. `∅`, which means this is the default combat art.
 3. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding directional inputs.
 
+The columns in between store the names of the combat arts. They're only there for reference. Feel free to modify or delete them.
+
 > [!NOTE] 
-> Binding two **adjecent** direction inputs (such as `↑→`) to a combat art is not recommended because you use these kind inputs to walk around. 
+> Binding two **adjecent** directional inputs (such as `↑→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements. 
 >
-> The <kbd>Block</kbd> omittion feature also won't work on combat arts configured this way or else the MOD won't be able to differentiate between "walk then attack" and "perform combat arts".
+> The <kbd>Block</kbd> omittion feature also won't work on combat arts configured this way because the MOD needs to differentiate between "move then attack" and "perform combat arts".
 
