@@ -259,13 +259,14 @@ impl Mod {
             *action_bitfield |= BLOCK;
             self.injected_frames = 1;
         } else if self.injected_frames >= 1 { 
-            if self.cur_art == ASHINA_CROSS && attacking {
-                // hold BLOCK for ashina cross as long as ATTACK is also held
-                // until the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
-                if blocking {
-                    self.injected_frames = 0;
-                } else {
+            if self.cur_art == ASHINA_CROSS {
+                // hold BLOCK for ashina cross as long as ATTACK is held until: 
+                // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
+                // 2. the player released the attack
+                if attacking && !blocking{
                     *action_bitfield |= BLOCK;
+                } else {
+                    self.injected_frames = 0;
                 }
             } else if self.injected_frames < BLOCK_INJECTION_DURATION {
                 // inject just a few frames for other art
@@ -367,12 +368,12 @@ fn set_combat_art(uid: u32) -> bool {
         return false;
     };
     // cast the combat art id to some sort of "equip data" array.
-    let mut equip_data: [u32;17] = [0;17];
-    let data_pointer = {
+    let mut equip_data = [0;17];
+    let equip_data = {
         equip_data[14] = item_id as u32;
         equip_data.as_ptr()
     };
-    _set_skill_slot(1, data_pointer, true);
+    _set_skill_slot(1, equip_data, true);
     trace!("Switched to combat art: {uid}");
     return true;
 }
@@ -391,7 +392,7 @@ fn get_item_id(uid: u32) -> Option<u64> {
 
     let player_game_data = unsafe { *((game_data + 0x8) as *const usize) };
     if player_game_data == 0 {
-        error!("game_data is null");
+        error!("player_game_data is null");
         return None
     }
 
@@ -420,9 +421,9 @@ fn get_item_id(uid: u32) -> Option<u64> {
 
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
-fn _get_item_id(inventory: *const c_void, id: &u32) -> u64 {
-    let f = unsafe{ mem::transmute::<_, fn(*const c_void, id: &u32)->u64>(GET_ITEM_ID) };
-    f(inventory, id)
+fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64 {
+    let f = unsafe{ mem::transmute::<_, fn(*const c_void, *const u32)->u64>(GET_ITEM_ID) };
+    f(inventory, uid)
 }
 
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
