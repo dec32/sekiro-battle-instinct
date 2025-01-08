@@ -133,12 +133,12 @@ impl InputBuffer {
             self.inputs.clear();
         }
         self.inputs.push(input);
+        trace!("Buffer: {:?}({}) ", self.inputs, self.frames);
     }
 
     fn incr_frames(&mut self, updated: bool) {
         if updated {
             self.frames = 0;
-            trace!("Buffer: {:?}", self.inputs);
         } else {
             self.frames = self.frames.saturating_add(1);
         }
