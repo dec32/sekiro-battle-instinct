@@ -23,13 +23,12 @@ const XINPUT_RETRY_INTERVAL: u16 = 300;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 
-// some function pointers from the original game
+// addresses of some functions from the original game
 const PROCESS_INPUT: usize  = 0x140B2C190;
 const GET_ITEM_ID: usize = 0x140C3D680;
 const SET_SKILL_SLOT: usize = 0x140D592F0;
-const PLAY_UI_SOUND: usize = 0x1408CE960;
 
-// Combat art UIDs
+// combat art UIDs
 const ASHINA_CROSS: u32 = 5500;
 const ICHIMONJI: u32 = 5300;
 const ICHIMONJI_DOUBLE: u32 = 7100;
@@ -174,7 +173,7 @@ fn modulate(path: &Path) -> Result<()> {
         let orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
             .map_err(|e|anyhow!("{e:?}"))?;
         let orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(orig);
-        MOD.orig = Some(orig); 
+        MOD.orig = orig; 
         MinHook::enable_all_hooks().unwrap();
     }
     Ok(())
@@ -193,7 +192,7 @@ struct Mod {
     injected_frames: u8,
     supressed_frames: u8,
     // the original process_input function
-    orig: Option<fn(*const c_void, usize) -> usize>,
+    orig: fn(*const c_void, usize) -> usize,
 }
 
 impl Mod {
@@ -206,7 +205,7 @@ impl Mod {
             injected_frames: 0,
             supressed_frames: u8::MAX,
             cur_art: 0,
-            orig: None,
+            orig: |_, _|{ panic!("The address of process_input is absent.") },
         }
     }
 
@@ -289,7 +288,7 @@ impl Mod {
 
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
-        self.orig.unwrap()(input_handler, arg)
+        (self.orig)(input_handler, arg)
     }
 
 
@@ -418,28 +417,21 @@ fn get_item_id(uid: u32) -> Option<u64> {
 //
 //----------------------------------------------------------------------------
 
+macro_rules! call {
+    ($ty:ty, $address:expr, $($param: expr),*) => {
+        // transmuting integers to pointers is undefined behavior
+        unsafe { mem::transmute::<_, $ty>($address as *const ())($($param),*) }
+    };
+}
 
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
 fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64 {
-    let f = unsafe{ mem::transmute::<_, fn(*const c_void, *const u32)->u64>(GET_ITEM_ID) };
-    f(inventory, uid)
+    call!(fn(*const c_void, *const u32)->u64, GET_ITEM_ID, inventory, uid)
 }
 
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
 // equip_data: equip_data[14] is for combat art ID. equip_data[16] is for prosthetics ID
-fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool) {    
-    let f = unsafe{ mem::transmute::<_, fn(isize, *const u32, bool)>(SET_SKILL_SLOT) };
-    f(equip_slot, equip_data, ignore_equip_lock);
+fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool) {
+    call!(fn(isize, *const u32, bool), SET_SKILL_SLOT, equip_slot, equip_data, ignore_equip_lock)
 }
-
-
-// for debugging
-#[allow(dead_code)]
-fn _play_ui_sound(arg1: isize, arg2: isize) {
-    let f = unsafe{ mem::transmute::<_, fn(isize, isize)>(PLAY_UI_SOUND) };
-    f(arg1, arg2);
-}
-
-
-
