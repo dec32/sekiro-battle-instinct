@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, thread, time::Duration, u8};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, panic, path::{Path, PathBuf}, thread, time::Duration, u8};
 use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
@@ -221,6 +221,9 @@ impl Mod {
         let blocking = *action_bitfield & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
+        if attacked_just_now {
+            trace!("Attack");
+        }
         
         // TODO inject backward action for Nightjar Reversal
         // (0, 0) is filtered out so I can test the keyboard while the controller is still plugged in
@@ -280,10 +283,6 @@ impl Mod {
         if self.supressed_frames < ATTACK_SUPRESSION_DURATION {
             *action_bitfield &= !ATTACK;
             self.supressed_frames += 1;
-        }
-
-        if *action_bitfield != 0 {
-            trace!("Action: {:016x}", action_bitfield)
         }
 
         self.attacking_last_frame = attacking;
@@ -373,7 +372,6 @@ fn set_combat_art(uid: u32) -> bool {
         equip_data.as_ptr()
     };
     _set_skill_slot(1, equip_data, true);
-    trace!("Switched to combat art: {uid}");
     return true;
 }
 

@@ -1,6 +1,6 @@
 use std::{env, fs, os::windows::fs::MetadataExt, path::PathBuf};
 use chrono::Local;
-use log::{Level, LevelFilter::*};
+use log::{error, Level, LevelFilter::*};
 
 #[cfg(debug_assertions)]
 const RELEASE: bool = false;
@@ -36,6 +36,7 @@ fn _setup() -> Result<(), fern::InitError>{
         .level(if RELEASE { Warn } else { Trace })
         .chain(fern::log_file(path)?)
         .apply()?;
+    std::panic::set_hook(Box::new(|info|error!("{info}")));
     Ok(())
 }
 

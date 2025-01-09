@@ -3,11 +3,14 @@ use log::trace;
 use Input::*;
 
 const INPUTS_CAP: usize = 3;
-const MAX_INTERVAL: u8 = 20;
-const MAX_ATTACK_DELAY: u8 = 10;
-const JOYSTICK_THRESHOLD: u16 = i16::MAX as u16 / 100 * 80;
-const JOYSTICK_ROTATE_THRESHOLD: u16 = i16::MAX as u16 / 100 * 90;
-const JOYSTICK_BOUNCE_THRESHOLD: u16 = i16::MAX as u16 / 100 * 50;
+const MAX_INTERVAL: u8 = 15;
+const MAX_ATTACK_DELAY: u8 = 25;
+// Joystick ergonomics
+const MAX_DISTANCE: u16 = i16::MAX as u16;
+const COMMON_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
+const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
+const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
+
 
 /// I love type safety and readability.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -97,26 +100,25 @@ impl InputBuffer {
             if x > 0 { Right } else { Left } 
         };
 
-        // using chebyshev distance means we have a square-shaped dead zone
-        let chebyshev_distance = u16::max(x_abs, y_abs);
+        // using chebyshev distance means we have a square-shaped neutral zone
+        let distance = u16::max(x_abs, y_abs);
         let threshold = if let Some(last) = self.inputs.last().cloned() {
             if input == last {
-                JOYSTICK_THRESHOLD
+                COMMON_THRESHOLD
             } else if input == last.opposite() {
-                // makes bouncing inputs (↑↓, ↓↑, ←→, →←) easier to perform
-                JOYSTICK_BOUNCE_THRESHOLD
+                // makes bouncing inputs (↑↓, ↓↑, ←→, →←) easier by using a smaller threshold
+                BOUNCE_THRESHOLD
             } else {
-                // makes rotating inputs (↑→, →↓, ↓←, ←↑) HARDER to perform
-                JOYSTICK_ROTATE_THRESHOLD
+                // makes rotating inputs (↑→, →↓, ↓←, ←↑) HARDER by using a bigger threshold
+                ROTATE_THRESHOLD
             }
         } else {
-            JOYSTICK_THRESHOLD
+            COMMON_THRESHOLD
         };
 
-        if chebyshev_distance < threshold {
+        if distance < threshold {
             self.neutral = true;
         } else {
-            // direction change
             if self.neutral || self.inputs.last().into_iter().any(|last|input != *last) {
                 self.push(input);
                 updated = true;
@@ -133,7 +135,7 @@ impl InputBuffer {
             self.inputs.clear();
         }
         self.inputs.push(input);
-        trace!("Buffer: {:?}({}) ", self.inputs, self.frames);
+        trace!("{:?}({}) ", self.inputs, self.frames);
     }
 
     fn incr_frames(&mut self, updated: bool) {
