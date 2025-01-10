@@ -2,10 +2,11 @@ use arrayvec::ArrayVec;
 use log::trace;
 use Input::*;
 
+// buffer behavior
 const INPUTS_CAP: usize = 3;
 const MAX_INTERVAL: u8 = 15;
 const MAX_ATTACK_DELAY: u8 = 25;
-// Joystick ergonomics
+// joystick ergonomics
 const MAX_DISTANCE: u16 = i16::MAX as u16;
 const COMMON_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
 const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
@@ -56,7 +57,7 @@ impl InputsExt for Inputs {
 }
 
 /// A input buffer that remembers the most recent 3 motion inputs
-/// The buffer expires after 10 frames unless new inputs are pushed into the buffer and refresh its age
+/// The buffer expires after several frames unless new inputs are pushed into it and reset its age
 pub struct InputBuffer {
     inputs: Inputs,
     keys_down: [bool; 4],
@@ -74,7 +75,7 @@ impl InputBuffer {
         }
     }
 
-    // TODO it should tell its caller if the inputs are expired or not
+    // TODO it should tell its caller if the inputs expired or not
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
         for (i, down) in [up, right, down, left].iter().cloned().enumerate() {

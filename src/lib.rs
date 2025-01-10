@@ -19,12 +19,13 @@ use ::log::{debug, error, trace};
 
 // MOD behavior
 const HOOK_DELAY: Duration = Duration::from_secs(10);
+const XUSER_MAX_COUNT: u32 = 3;
 const XINPUT_RETRY_INTERVAL: u16 = 300;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 
 // addresses of some functions from the original game
-const PROCESS_INPUT: usize  = 0x140B2C190;
+const PROCESS_INPUT: usize = 0x140B2C190;
 const GET_ITEM_ID: usize = 0x140C3D680;
 const SET_SKILL_SLOT: usize = 0x140D592F0;
 
@@ -170,10 +171,10 @@ fn modulate(path: &Path) -> Result<()> {
         let path = path.join("battle_instinct.cfg");
         MOD.load_config(&path)?;
         // Hijack the input processing function
-        let orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
+        let process_input_orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
             .map_err(|e|anyhow!("{e:?}"))?;
-        let orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(orig);
-        MOD.orig = orig; 
+        let process_input_orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(process_input_orig);
+        MOD.process_input_orig = process_input_orig; 
         MinHook::enable_all_hooks().unwrap();
     }
     Ok(())
@@ -191,8 +192,7 @@ struct Mod {
     attacking_last_frame: bool,
     injected_frames: u8,
     supressed_frames: u8,
-    // the original process_input function
-    orig: fn(*const c_void, usize) -> usize,
+    process_input_orig: fn(*const c_void, usize) -> usize,
 }
 
 impl Mod {
@@ -205,7 +205,7 @@ impl Mod {
             injected_frames: 0,
             supressed_frames: u8::MAX,
             cur_art: 0,
-            orig: |_, _|{ panic!("The address of process_input is absent.") },
+            process_input_orig: |_, _|{ panic!("The address of process_input is absent.") },
         }
     }
 
@@ -287,7 +287,7 @@ impl Mod {
 
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
-        (self.orig)(input_handler, arg)
+        (self.process_input_orig)(input_handler, arg)
     }
 
 
@@ -329,19 +329,23 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
     // checking a disconnected controller slot requires device enumeration, which can be a performance hit
     // TODO where to put this COUNTDOWN variable?
     static mut COUNTDOWN: u16 = 0;
+    static mut LATEST_INDEX: u32 = 0;
     unsafe {
         if COUNTDOWN > 0 {
             COUNTDOWN -= 1;
             return None;
         }
         let mut xinput_state = mem::zeroed();
-        let res = XInputGetState(0, &mut xinput_state);
-        if res != ERROR_SUCCESS.0 {
-            COUNTDOWN = XINPUT_RETRY_INTERVAL;
-            None
-        } else {
-            Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
+        for idx in LATEST_INDEX..LATEST_INDEX + XUSER_MAX_COUNT {
+            let user_index = idx % XUSER_MAX_COUNT;
+            let res = XInputGetState(user_index, &mut xinput_state);
+            if res == ERROR_SUCCESS.0 {
+                LATEST_INDEX = user_index;
+                return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
+            }
         }
+        COUNTDOWN = XINPUT_RETRY_INTERVAL;
+        None
     }
 }
 
