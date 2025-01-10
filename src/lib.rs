@@ -329,18 +329,18 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
     // checking a disconnected controller slot requires device enumeration, which can be a performance hit
     // TODO where to put this COUNTDOWN variable?
     static mut COUNTDOWN: u16 = 0;
-    static mut LATEST_INDEX: u32 = 0;
+    static mut LATEST_IDX: u32 = 0;
     unsafe {
         if COUNTDOWN > 0 {
             COUNTDOWN -= 1;
             return None;
         }
         let mut xinput_state = mem::zeroed();
-        for idx in LATEST_INDEX..LATEST_INDEX + XUSER_MAX_COUNT {
-            let user_index = idx % XUSER_MAX_COUNT;
-            let res = XInputGetState(user_index, &mut xinput_state);
+        for idx in LATEST_IDX..LATEST_IDX + XUSER_MAX_COUNT {
+            let idx = idx % XUSER_MAX_COUNT;
+            let res = XInputGetState(idx, &mut xinput_state);
             if res == ERROR_SUCCESS.0 {
-                LATEST_INDEX = user_index;
+                LATEST_IDX = idx;
                 return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
             }
         }
@@ -419,21 +419,20 @@ fn get_item_id(uid: u32) -> Option<u64> {
 //
 //----------------------------------------------------------------------------
 
-macro_rules! call {
-    ($ty:ty, $address:expr, $($param: expr),*) => {
-        // transmuting integers to pointers is undefined behavior
-        unsafe { mem::transmute::<_, $ty>($address as *const ())($($param),*) }
+macro_rules! ext {
+    (fn $name:tt($($arg:tt: $arg_ty:ty),*) $(-> $ret_ty:ty)?, $address:expr) => {
+        #[inline(always)]
+        fn $name($($arg: $arg_ty),*) $(-> $ret_ty)? {
+            unsafe { mem::transmute::<_, fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
+        }
     };
 }
 
+
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
-fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64 {
-    call!(fn(*const c_void, *const u32)->u64, GET_ITEM_ID, inventory, uid)
-}
+ext!(fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool), SET_SKILL_SLOT);
 
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
 // equip_data: equip_data[14] is for combat art ID. equip_data[16] is for prosthetics ID
-fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool) {
-    call!(fn(isize, *const u32, bool), SET_SKILL_SLOT, equip_slot, equip_data, ignore_equip_lock)
-}
+ext!(fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64, GET_ITEM_ID);
