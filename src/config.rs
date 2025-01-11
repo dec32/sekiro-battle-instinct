@@ -48,9 +48,9 @@ impl Config {
                 let inputs = inputs.chars()
                     .filter_map(|ch|match ch {
                         '↑'|'u'|'上' => Some(Up),
-                        '↓'|'d'|'下' => Some(Down),
-                        '←'|'l'|'左' => Some(Left),
-                        '→'|'r'|'右' => Some(Right),
+                        '↓'|'d'|'下' => Some(Dn),
+                        '←'|'l'|'左' => Some(Lt),
+                        '→'|'r'|'右' => Some(Rt),
                         _ => None })
                     .take(3)
                     .collect::<Inputs>();
@@ -69,7 +69,7 @@ impl Config {
                 // fault tolerance for joysticks. 
                 // example: if ↑↓ is used while ↑→↓ is not, treat ↑→↓ as ↑↓ so that players won't accidentally do semicircles
                 if inputs.len() == 2 && inputs[0] == inputs[1].opposite() {
-                    for fault in [Up, Right, Down, Left] {
+                    for fault in [Up, Rt, Dn, Lt] {
                         if fault == inputs[0] || fault == inputs[1] {
                             continue;
                         }

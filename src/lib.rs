@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, panic, path::{Path, PathBuf}, thread, time::Duration, u8};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, panic, path::{Path, PathBuf}, thread, time::{Duration, Instant}, u8};
 use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
@@ -330,12 +330,17 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
     // TODO where to put this COUNTDOWN variable?
     static mut COUNTDOWN: u16 = 0;
     static mut LATEST_IDX: u32 = 0;
+    static mut CHECK_ELAPSED: bool = false;
     unsafe {
         if COUNTDOWN > 0 {
             COUNTDOWN -= 1;
+            if COUNTDOWN == 0 {
+                CHECK_ELAPSED = true;
+            }
             return None;
         }
         let mut xinput_state = mem::zeroed();
+        let start = if CHECK_ELAPSED { Some(Instant::now()) } else { None };
         for idx in LATEST_IDX..LATEST_IDX + XUSER_MAX_COUNT {
             let idx = idx % XUSER_MAX_COUNT;
             let res = XInputGetState(idx, &mut xinput_state);
@@ -343,6 +348,13 @@ fn get_joystick_pos() -> Option<(i16, i16)> {
                 LATEST_IDX = idx;
                 return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
             }
+        }
+        if let Some(start) = start {
+            let elapsed = start.elapsed().as_micros();
+            if elapsed > 500 {
+                debug!("XInputGetState takes {} us.", elapsed);
+            }
+            CHECK_ELAPSED = false;
         }
         COUNTDOWN = XINPUT_RETRY_INTERVAL;
         None
