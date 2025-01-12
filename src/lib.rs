@@ -69,14 +69,12 @@ const USE_PROSTHETIC: u64 = 0x40040002; // you sure this is correct?
 extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: *mut()) -> bool {
     if call_reason == DLL_PROCESS_ATTACH {
         log::setup();
-        let mut path = vec![0;128];
-        let len = unsafe { GetModuleFileNameW(dll_module, path.as_mut_slice()) } as usize;
-        let dll_path = PathBuf::from(OsString::from_wide(&path[..len]));
-        thread::spawn(move ||{
-            let dir_path = dll_path.parent().unwrap();
-            chainload(dir_path).inspect_err(|e|error!("Failed to chainload other dinput8.dll files. {e}")).ok();
-            modulate(dir_path).inspect_err(|e|error!("Errored occured when modulating. {e}")).ok();
-        });
+        let mut buf: Vec<u16> = vec![0;128];
+        let len = unsafe { GetModuleFileNameW(dll_module, buf.as_mut_slice()) } as usize;
+        let dll_path = PathBuf::from(OsString::from_wide(&buf[..len]));
+        let dir_path = dll_path.parent().unwrap();
+        chainload(dir_path);
+        modulate(dir_path);
     }
     true
 }
@@ -124,7 +122,11 @@ fn load_dll() -> windows::core::Result<usize> {
 //
 //----------------------------------------------------------------------------
 
-fn chainload(path: &Path) -> Result<()> {
+fn chainload(path: &Path) {
+    _chainload(path).inspect_err(|e|error!("Failed to chainload other dinput8.dll files. {e}")).ok();
+}
+
+fn _chainload(path: &Path) -> Result<()> {
     let mut names = Vec::new();
     for entry in fs::read_dir(path)?.filter_map(Result::ok) {
         let name = entry.file_name();
@@ -153,22 +155,26 @@ fn chainload(path: &Path) -> Result<()> {
 }
 
 
-
 //----------------------------------------------------------------------------
 //
-//  Actual content of the mod
+//  Initialize the MOD
 //
 //----------------------------------------------------------------------------
 
-// TODO use some cheap try_lock mechanism to gurantee single thread access
 static mut MOD: Mod = Mod::new();
 
-fn modulate(path: &Path) -> Result<()> {
-    // hooking fails (MH_ERROR_UNSUPPORTED_FUNCTION) if it starts too soon
-    thread::sleep(HOOK_DELAY);
+fn modulate(path: &Path) {
+    let path = path.join("battle_instinct.cfg");
+    thread::spawn(||{
+        // hooking fails if it starts too soon (MH_ERROR_UNSUPPORTED_FUNCTION)
+        thread::sleep(HOOK_DELAY);
+        _modulate(path).inspect_err(|e|error!("Errored occured when modulating. {e}"))
+    });
+}
+
+fn _modulate(path: PathBuf) -> Result<()> {
     unsafe {
         // Loading configs
-        let path = path.join("battle_instinct.cfg");
         MOD.load_config(&path)?;
         // Hijack the input processing function
         let process_input_orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
@@ -183,6 +189,13 @@ fn modulate(path: &Path) -> Result<()> {
 fn process_input(input_handler: *const c_void, arg: usize) -> usize {
     unsafe { MOD.process_input(input_handler, arg) }
 }
+
+
+//----------------------------------------------------------------------------
+//
+//  Actual content of the mod
+//
+//----------------------------------------------------------------------------
 
 struct Mod {
     config: Config,
