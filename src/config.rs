@@ -6,13 +6,13 @@ use crate::input::{Input::*, Inputs, InputsTrie};
 
 pub struct Config{
     pub default_art: Option<u32>,
-    pub arts: InputsTrie<u32>
+    pub arts: InputsTrie<u32>,
 }
 
 impl Config {
     pub const fn new() -> Config {
         Config {
-            default_art: None, // Wirlwind Slash
+            default_art: None,
             arts: InputsTrie::new(),
         }
     }
@@ -42,15 +42,19 @@ impl Config {
             }
 
             
-            if inputs.eq_ignore_ascii_case("none") || matches!(inputs, "∅" | "空")  {
+            if matches!(inputs, "∅" | "空" | "none") {
                 config.default_art = Some(id);
             } else {
                 let inputs = inputs.chars()
                     .filter_map(|ch|match ch {
-                        '↑'|'u'|'上' => Some(Up),
-                        '↓'|'d'|'下' => Some(Dn),
-                        '←'|'l'|'左' => Some(Lt),
-                        '→'|'r'|'右' => Some(Rt),
+                        '↑'|'8'|'u'|'上' => Some(Up),
+                        '→'|'6'|'r'|'右' => Some(Rt),
+                        '↓'|'2'|'d'|'下' => Some(Dn),
+                        '←'|'4'|'l'|'左' => Some(Lt),
+                        '↗'|'9' => Some(Ur),
+                        '↘'|'3' => Some(Dr),
+                        '↙'|'1' => Some(Dl),
+                        '↖'|'7' => Some(Ul),
                         _ => None })
                     .take(3)
                     .collect::<Inputs>();

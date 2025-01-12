@@ -11,7 +11,7 @@ const MAX_ATTACK_DELAY: u8 = 25;
 // joystick ergonomics
 const MAX_DISTANCE: u16 = i16::MAX as u16;
 const ORTHO_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
-const DIAGO_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
+const DIAGO_THRESHOLD: u16 = MAX_DISTANCE / 100 * 50;
 const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
 const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
 
@@ -62,6 +62,10 @@ impl Input {
     fn digit(self) -> usize {
         self as usize + 1
     }
+
+    fn rotate(self) -> Input {
+        Input::from((self as usize + 1) % 8)
+    }
 }
 
 
@@ -80,20 +84,20 @@ impl InputsExt for Inputs {
 /// The buffer expires after several frames unless new inputs are pushed into it and reset its age
 pub struct InputBuffer {
     inputs: Inputs,
-    keys_down: [bool; 4],
-    neutral: bool,
-    allow_diagonal: bool,
+    inputs_archive: Inputs,
     frames: u8,
+    neutral: bool,
+    keys_down: [bool; 4],
 }
 
 impl InputBuffer {
     pub const fn new() -> InputBuffer {
         InputBuffer {
             inputs: Inputs::new_const(),
-            keys_down: [false; 4],
-            neutral: true,
-            allow_diagonal: false,
+            inputs_archive: Inputs::new_const(),
             frames: 0,
+            neutral: true,
+            keys_down: [false; 4],
         }
     }
 
@@ -116,7 +120,7 @@ impl InputBuffer {
         let mut updated = false;
         let x_abs = x.unsigned_abs();
         let y_abs = y.unsigned_abs();
-        let input = if x_abs > DIAGO_THRESHOLD && y_abs > DIAGO_THRESHOLD && self.allow_diagonal {
+        let input = if x_abs > DIAGO_THRESHOLD && y_abs > DIAGO_THRESHOLD {
             let input = match(x, y) {
                 (0.., 0..) => Ur,
                 (0.., _  ) => Dr,
@@ -152,7 +156,7 @@ impl InputBuffer {
         };
         
         if let Some(input) = input {
-            if self.neutral || !self.inputs.ends_with(&[input]) {
+            if self.neutral || !self.ends_with(input) {
                 self.push(input);
                 updated = true;
             }
@@ -160,25 +164,54 @@ impl InputBuffer {
         } else {
             self.neutral = true;
         }
+
         self.incr_frames(updated);
         self.inputs.clone()
     }
 
+    // It may alternate self.inputs in ways you would not expect for fault tolerance
+    // So don't rely on self.inputs for state tracking
     fn push(&mut self, input: Input) {
+        // recover from archive
+        if !self.inputs_archive.is_empty() {
+            self.inputs = self.inputs_archive.clone();
+            self.inputs_archive.clear();
+        }
+
         if self.frames > MAX_INTERVAL {
+            trace!("--------------");
             self.inputs.clear();
         }
-        // diagonal inputs never take part in sequences
-        if input.is_diagonal() && !self.inputs.is_empty() {
-            trace!("Denied {input:?}");
-            return;
+        // 1. compress quarter circles  (like ↓↘→ as ↓→)
+        // 2. fix/prevent faulty inputs (like ↘→→, ←↘→ and →→↘. they don't quite make sense)
+        if self.inputs.len() == 2 {
+            if input.is_diagonal() {
+                return
+            }
+            if self.inputs[1].is_diagonal() {
+                self.inputs.pop();
+            } else if self.inputs[0].is_diagonal() {
+                self.inputs.remove(0);
+            }
         }
-        // thus when other inputs happens, the leading diagonal input gets kicked out
-        if self.inputs.first().into_iter().any(|first|first.is_diagonal()) || self.inputs.is_full(){
+        // Shifting a 3-element array is not that slow I promise
+        if self.inputs.is_full(){
             self.inputs.remove(0);
         }
         self.inputs.push(input);
-        trace!("{:?}({}) ", self.inputs, self.frames);
+
+        // fix faulty diagonal inputs 
+        if self.inputs.len() == 2 {
+            let a = self.inputs[0];
+            let b = self.inputs[1];
+            if a.rotate() == b || b.rotate() == a {
+                let diagonal = if a.is_diagonal() { a } else { b };
+                self.inputs_archive = self.inputs.clone();
+                self.inputs.clear();
+                self.inputs.push(diagonal);
+            }
+        }
+        trace!("{:?} | {:<9?}({}) ", input, self.inputs, self.frames);
     }
 
     fn incr_frames(&mut self, updated: bool) {
@@ -189,12 +222,20 @@ impl InputBuffer {
         }
     }
 
+    fn ends_with(&self, input: Input) -> bool {
+        self.inputs_archive.last()
+            .or(self.inputs.last())
+            .filter(|last|input == **last)
+            .is_some()
+    }
+
     pub fn aborted(&self) -> bool {
         self.keys_down == [false, false, false, false] && self.neutral && self.frames >= MAX_ATTACK_DELAY
     }
 
     pub fn clear(&mut self) {
         self.inputs.clear();
+        self.inputs_archive.clear();
         self.frames = 0;
     }
 }

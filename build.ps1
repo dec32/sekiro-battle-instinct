@@ -17,6 +17,5 @@ if ($Release) {
 } else {
     cargo build
     Copy-Item ".\target\debug\battle_instinct.dll" -Destination "C:\Program Files (x86)\Steam\steamapps\common\Sekiro\dinput8.dll"
-    Copy-Item ".\battle_instinct.cfg" -Destination "C:\Program Files (x86)\Steam\steamapps\common\Sekiro\battle_instinct.cfg"
 }
 
