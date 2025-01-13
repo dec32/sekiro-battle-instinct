@@ -178,7 +178,7 @@ impl InputBuffer {
             self.inputs_archive.clear();
         }
 
-        if self.expired() {
+        if self.frames > MAX_INTERVAL {
             trace!("--------------");
             self.inputs.clear();
         }
