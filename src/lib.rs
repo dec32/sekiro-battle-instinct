@@ -253,7 +253,7 @@ impl Mod {
         let desired_art = if self.cur_art == ASHINA_CROSS && attacking {
             // keep using Ashina Cross when the player is waiting to strike
             Some(ASHINA_CROSS)
-        } else if blocked_just_now && self.buffer.aborted() {
+        } else if blocked_just_now && self.buffer.expired() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear(); 
@@ -270,7 +270,7 @@ impl Mod {
 
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK, because the mod injects the BLOCK action for them
-        if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.aborted(){
+        if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.expired(){
             *action_bitfield |= BLOCK;
             self.injected_frames = 1;
         } else if self.injected_frames >= 1 { 

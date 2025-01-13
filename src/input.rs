@@ -178,7 +178,7 @@ impl InputBuffer {
             self.inputs_archive.clear();
         }
 
-        if self.frames > MAX_INTERVAL {
+        if self.expired() {
             trace!("--------------");
             self.inputs.clear();
         }
@@ -229,8 +229,8 @@ impl InputBuffer {
             .is_some()
     }
 
-    pub fn aborted(&self) -> bool {
-        self.keys_down == [false, false, false, false] && self.neutral && self.frames >= MAX_ATTACK_DELAY
+    pub fn expired(&self) -> bool {
+        self.frames >= MAX_ATTACK_DELAY
     }
 
     pub fn clear(&mut self) {
