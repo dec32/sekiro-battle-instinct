@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, panic, path::{Path, PathBuf}, thread, time::{Duration, Instant}, u8};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, panic, path::{Path, PathBuf}, ptr::NonNull, thread, time::{Duration, Instant}, u8};
 use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
@@ -387,6 +387,24 @@ fn is_key_down(keycode: VIRTUAL_KEY) -> bool {
 //
 //----------------------------------------------------------------------------
 
+fn game_data() -> Option<NonNull<GameData>> {
+    unsafe { *(GAME_DATA as *const Option<NonNull<GameData>>) }
+}
+
+/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
+/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
+/// When putting things into item slots, the latter shall be used.
+fn get_item_id(uid: u32) -> Option<u64> {
+    let inventory = unsafe { &game_data()?.as_ref().player_data?.as_ref().inventory_data?.as_ref().inventory };
+    let uid = &uid;
+    let item_id = _get_item_id(inventory, uid);
+    if item_id == 0xFFFFFFFF {
+        return None;
+    }
+    Some(item_id)
+}
+
+
 fn set_combat_art(uid: u32) -> bool {
     // Validate if the player has already obtained the combat art
     // If so, there should be a corresponding item (with an item ID) representing that art
@@ -395,48 +413,31 @@ fn set_combat_art(uid: u32) -> bool {
     let Some(item_id) = get_item_id(uid) else {
         return false;
     };
-    // cast the combat art id to some sort of "equip data" array.
-    let mut equip_data = [0;17];
-    let equip_data = {
-        equip_data[14] = item_id as u32;
-        equip_data.as_ptr()
+    let equip_data = EquipData {
+        padding: [0; 52],
+        prosthetic_tool_item_id: 0,
+        combat_art_item_id: item_id
     };
+    let equip_data = &equip_data;
     _set_skill_slot(1, equip_data, true);
     return true;
 }
 
 
-/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
-/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
-/// When putting things into item slots, the latter shall be used.
-fn get_item_id(uid: u32) -> Option<u64> {
-    // we are going on an adventure of pointers
-    let game_data = unsafe{ *(GAME_DATA as *const usize)};
-    if game_data == 0 {
-        error!("game_data is null");
-        return None
-    }
+//----------------------------------------------------------------------------
+//
+//  Structs (or maybe classes) from the original program
+//
+//----------------------------------------------------------------------------
 
-    let player_game_data = unsafe { *((game_data + 0x8) as *const usize) };
-    if player_game_data == 0 {
-        error!("player_game_data is null");
-        return None
-    }
-
-    let inventory_data = unsafe { *((player_game_data + 0x5B0) as *const usize)};
-    if inventory_data == 0 {
-        error!("inventory_data is null");
-        return None;
-    }
-    let inventory_data = inventory_data + 0x10;
-
-    // finnally get the object
-    let item_id = _get_item_id(inventory_data as *const c_void, &uid);
-    if item_id == 0xFFFFFFFF {
-        return None;
-    }
-    Some(item_id)
-}
+#[repr(C)]
+struct GameData { padding: [u8;8], player_data: Option<NonNull<PlayerData>> }
+#[repr(C)]
+struct PlayerData { padding: [u8;1456], inventory_data: Option<NonNull<InventoryData>> }
+#[repr(C)]
+struct InventoryData { padding: [u8;16], inventory: c_void }
+#[repr(C)]
+struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
 
 
 //----------------------------------------------------------------------------
@@ -454,11 +455,9 @@ macro_rules! ext {
     };
 }
 
-
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
-ext!(fn _set_skill_slot(equip_slot: isize, equip_data: *const u32, ignore_equip_lock: bool), SET_SKILL_SLOT);
+ext!(fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64, GET_ITEM_ID);
 
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
-// equip_data: equip_data[14] is for combat art ID. equip_data[16] is for prosthetics ID
-ext!(fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64, GET_ITEM_ID);
+ext!(fn _set_skill_slot(equip_slot: isize, equip_data: *const EquipData, ignore_equip_lock: bool), SET_SKILL_SLOT);
