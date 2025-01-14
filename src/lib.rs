@@ -24,7 +24,8 @@ const XINPUT_RETRY_INTERVAL: u16 = 300;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 
-// addresses of some functions from the original game
+// addresses of objects and functions from the original program
+const GAME_DATA: usize = 0x143D5AAC0;
 const PROCESS_INPUT: usize = 0x140B2C190;
 const GET_ITEM_ID: usize = 0x140C3D680;
 const SET_SKILL_SLOT: usize = 0x140D592F0;
@@ -410,7 +411,7 @@ fn set_combat_art(uid: u32) -> bool {
 /// When putting things into item slots, the latter shall be used.
 fn get_item_id(uid: u32) -> Option<u64> {
     // we are going on an adventure of pointers
-    let game_data = unsafe{ *(0x143D5AAC0 as *const usize)};
+    let game_data = unsafe{ *(GAME_DATA as *const usize)};
     if game_data == 0 {
         error!("game_data is null");
         return None
