@@ -178,11 +178,10 @@ fn _modulate(path: PathBuf) -> Result<()> {
         // Loading configs
         MOD.load_config(&path)?;
         // Hijack the input processing function
-        let process_input_orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
-            .map_err(|e|anyhow!("{e:?}"))?;
+        let process_input_orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).map_err(|e|anyhow!("{e:?}"))?;
         let process_input_orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(process_input_orig);
         MOD.process_input_orig = process_input_orig; 
-        MinHook::enable_all_hooks().unwrap();
+        MinHook::enable_all_hooks().map_err(|e|anyhow!("{e:?}"))?;
     }
     Ok(())
 }
