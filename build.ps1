@@ -7,10 +7,10 @@ if ($Release) {
     New-Item -ItemType Directory -Force -Path ".\tmp"
     Copy-Item ".\target\release\battle_instinct.dll" -Destination ".\tmp\dinput8.dll"
 
-    Copy-Item -Force ".\battle_instinct.cfg" -Destination ".\tmp\battle_instinct.cfg"
+    Copy-Item -Force ".\res\battle_instinct.cfg" -Destination ".\tmp\battle_instinct.cfg"
     Compress-Archive -Update -LiteralPath @(".\tmp\battle_instinct.cfg", ".\tmp\dinput8.dll") -CompressionLevel "NoCompression" -DestinationPath ".\battle-instinct_x64.zip"
 
-    Copy-Item -Force ".\battle_instinct_zh.cfg" -Destination ".\tmp\battle_instinct.cfg"
+    Copy-Item -Force ".\res\battle_instinct_zh.cfg" -Destination ".\tmp\battle_instinct.cfg"
     Compress-Archive -Update -LiteralPath @(".\tmp\battle_instinct.cfg", ".\tmp\dinput8.dll") -CompressionLevel "NoCompression" -DestinationPath ".\battle-instinct_zh_x64.zip"
     
     Remove-Item -Recurse ".\tmp"
