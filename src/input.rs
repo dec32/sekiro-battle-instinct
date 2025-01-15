@@ -230,7 +230,11 @@ impl InputBuffer {
     }
 
     pub fn expired(&self) -> bool {
-        self.frames >= MAX_ATTACK_DELAY
+        if self.inputs.len() == 1 && (!self.neutral || self.keys_down != [false, false, false, false]) {
+            false
+        } else {
+            self.frames >= MAX_ATTACK_DELAY
+        }
     }
 
     pub fn clear(&mut self) {
