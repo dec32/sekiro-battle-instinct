@@ -2,13 +2,13 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, panic, path::{Path, PathBuf}, ptr::NonNull, thread, time::{Duration, Instant}, u8};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, ptr::NonNull, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
 use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
 use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, ERROR_SUCCESS, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}}};
-use ::log::{debug, error, trace};
+use ::log::{debug, error, trace, warn};
 
 
 //----------------------------------------------------------------------------
@@ -82,13 +82,13 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
 
 //----------------------------------------------------------------------------
 //
-//  Redirect DirectInput8Create to the original dinput8.dll 
+//  Redirect DirectInput8Create to the original dinput8.dll
 //
 //----------------------------------------------------------------------------
 
 #[no_mangle]
 #[allow(non_snake_case, dead_code)]
-extern "stdcall" fn DirectInput8Create(hinst: HINSTANCE, dwversion: u32, riidltf: *const GUID, ppvout: *mut *mut c_void, punkouter: HINSTANCE) -> HRESULT {    
+extern "stdcall" fn DirectInput8Create(hinst: HINSTANCE, dwversion: u32, riidltf: *const GUID, ppvout: *mut *mut c_void, punkouter: HINSTANCE) -> HRESULT {
     match load_dll() {
         Ok(address) => {
             let f = unsafe { mem::transmute::<_, fn(HINSTANCE, u32, *const GUID, *mut *mut c_void, HINSTANCE)->HRESULT>(address) };
@@ -162,7 +162,8 @@ fn _chainload(path: &Path) -> Result<()> {
 //
 //----------------------------------------------------------------------------
 
-static mut MOD: Mod = Mod::new();
+static MOD: Mutex<Mod> = Mutex::new(Mod::new());
+static PROCESS_INPUT_ORIG: OnceLock<fn(*const c_void, usize) -> usize> = OnceLock::new();
 
 fn modulate(path: &Path) {
     let path = path.join("battle_instinct.cfg");
@@ -174,20 +175,21 @@ fn modulate(path: &Path) {
 }
 
 fn _modulate(path: PathBuf) -> Result<()> {
+    MOD.lock().unwrap().load_config(&path)?;
     unsafe {
-        // Loading configs
-        MOD.load_config(&path)?;
-        // Hijack the input processing function
-        let process_input_orig = MinHook::create_hook(PROCESS_INPUT as *mut c_void, process_input as *mut c_void).map_err(|e|anyhow!("{e:?}"))?;
-        let process_input_orig = mem::transmute::<_, fn(*const c_void, usize) -> usize>(process_input_orig);
-        MOD.process_input_orig = process_input_orig; 
+        let process_input_orig = MinHook::create_hook(
+            PROCESS_INPUT as *mut c_void,
+            process_input as *mut c_void).map_err(|e|anyhow!("{e:?}"))?;
+        PROCESS_INPUT_ORIG.set(mem::transmute(process_input_orig)).unwrap();
         MinHook::enable_all_hooks().map_err(|e|anyhow!("{e:?}"))?;
     }
     Ok(())
 }
 
-fn process_input(input_handler: *const c_void, arg: usize) -> usize {
-    unsafe { MOD.process_input(input_handler, arg) }
+fn process_input(input_handler: &c_void, arg: usize) -> usize {
+    MOD.lock().unwrap().process_input(input_handler);
+    let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
+    process_input_orig(input_handler, arg)
 }
 
 
@@ -205,7 +207,7 @@ struct Mod {
     attacking_last_frame: bool,
     injected_frames: u8,
     supressed_frames: u8,
-    process_input_orig: fn(*const c_void, usize) -> usize,
+    gamepad: Gamepad,
 }
 
 impl Mod {
@@ -218,7 +220,7 @@ impl Mod {
             injected_frames: 0,
             supressed_frames: u8::MAX,
             cur_art: 0,
-            process_input_orig: |_, _|{ panic!("The address of process_input is absent.") },
+            gamepad: Gamepad::new(),
         }
     }
 
@@ -227,7 +229,7 @@ impl Mod {
         Ok(())
     }
 
-    fn process_input(&mut self, input_handler: *const c_void, arg: usize) -> usize {
+    fn process_input(&mut self, input_handler: *const c_void) {
         // If you forget what a bitfield is please refer to Wikipedia
         let action_bitfield = unsafe{ mem::transmute::<_, &mut u64>(input_handler as usize + 0x10) };
         let attacking = *action_bitfield & ATTACK != 0;
@@ -237,10 +239,10 @@ impl Mod {
         if attacked_just_now {
             trace!("Attack");
         }
-        
+
         // TODO inject backward action for Nightjar Reversal
         // (0, 0) is filtered out so I can test the keyboard while the controller is still plugged in
-        let inputs = if let Some((x, y)) = get_joystick_pos().filter(|pos|*pos != (0, 0)) {
+        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos|*pos != (0, 0)) {
             self.buffer.update_joystick(x, y)
         } else {
             let up = is_key_down(VK_W);
@@ -256,7 +258,7 @@ impl Mod {
         } else if blocked_just_now && self.buffer.expired() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
-            self.buffer.clear(); 
+            self.buffer.clear();
             self.config.default_art
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
@@ -273,9 +275,9 @@ impl Mod {
         if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.expired(){
             *action_bitfield |= BLOCK;
             self.injected_frames = 1;
-        } else if self.injected_frames >= 1 { 
+        } else if self.injected_frames >= 1 {
             if self.cur_art == ASHINA_CROSS {
-                // hold BLOCK for ashina cross as long as ATTACK is held until: 
+                // hold BLOCK for ashina cross as long as ATTACK is held until:
                 // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
                 // 2. the player released the attack
                 if attacking && !blocking{
@@ -300,7 +302,6 @@ impl Mod {
 
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
-        (self.process_input_orig)(input_handler, arg)
     }
 
 
@@ -320,7 +321,7 @@ impl Mod {
             PRAYING_STRIKES_EXORCISM => Some(PRAYING_STRIKES),
             HIGH_MONK =>                Some(SENPO_LEAPING_KICKS),
             SHADOWFALL =>               Some(SHADOWRUSH),
-            EMPOWERED_MORTAL_DRAW =>    Some(MORTAL_DRAW), 
+            EMPOWERED_MORTAL_DRAW =>    Some(MORTAL_DRAW),
             _ => None
         };
         if let Some(fallback) = fallback {
@@ -337,47 +338,46 @@ impl Mod {
 //
 //----------------------------------------------------------------------------
 
-#[allow(unreachable_code)]
-fn get_joystick_pos() -> Option<(i16, i16)> {
-    // checking a disconnected controller slot requires device enumeration, which can be a performance hit
-    // TODO where to put this COUNTDOWN variable?
-    static mut COUNTDOWN: u16 = 0;
-    static mut LATEST_IDX: u32 = 0;
-    static mut CHECK_ELAPSED: bool = false;
-    unsafe {
-        if COUNTDOWN > 0 {
-            COUNTDOWN -= 1;
-            if COUNTDOWN == 0 {
-                CHECK_ELAPSED = true;
-            }
+fn is_key_down(keycode: VIRTUAL_KEY) -> bool {
+    unsafe { GetKeyState(keycode.0.into()) as u16 & 0x8000 != 0 }
+}
+
+// todo: add support for ps5 controllers
+struct Gamepad {
+    connected: bool,
+    countdown: u16,
+    latest_idx: u32,
+}
+
+impl Gamepad {
+    const fn new() -> Gamepad {
+        Gamepad { connected: false, countdown: 0, latest_idx: 0 }
+    }
+
+    fn get_left_pos(&mut self) -> Option<(i16, i16)> {
+        // checking a disconnected controller slot requires device enumeration,
+        // which can be a performance hit
+        if self.countdown > 0 {
+            self.countdown -= 1;
             return None;
         }
-        let mut xinput_state = mem::zeroed();
-        let start = if CHECK_ELAPSED { Some(Instant::now()) } else { None };
-        for idx in LATEST_IDX..LATEST_IDX + XUSER_MAX_COUNT {
+        // checking controllers
+        let mut xinput_state = unsafe { mem::zeroed() };
+        for idx in self.latest_idx..self.latest_idx + XUSER_MAX_COUNT {
             let idx = idx % XUSER_MAX_COUNT;
-            let res = XInputGetState(idx, &mut xinput_state);
+            let res = unsafe { XInputGetState(idx, &mut xinput_state) };
             if res == ERROR_SUCCESS.0 {
-                LATEST_IDX = idx;
+                self.connected = true;
+                self.latest_idx = idx;
                 return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
             }
         }
-        if let Some(start) = start {
-            let elapsed = start.elapsed().as_micros();
-            if elapsed > 500 {
-                debug!("XInputGetState takes {} us.", elapsed);
-            }
-            CHECK_ELAPSED = false;
-        }
-        COUNTDOWN = XINPUT_RETRY_INTERVAL;
-        None
+        // failed. start countdown
+        self.connected = false;
+        self.countdown = XINPUT_RETRY_INTERVAL;
+        return None;
     }
 }
-
-fn is_key_down(keycode: VIRTUAL_KEY) -> bool {
-    unsafe{ GetKeyState(keycode.0.into()) as u16 & 0x8000 != 0 }
-}
-
 
 
 //----------------------------------------------------------------------------
@@ -437,7 +437,6 @@ struct PlayerData { padding: [u8;1456], inventory_data: Option<NonNull<Inventory
 struct InventoryData { padding: [u8;16], inventory: c_void }
 #[repr(C)]
 struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
-
 
 //----------------------------------------------------------------------------
 //
