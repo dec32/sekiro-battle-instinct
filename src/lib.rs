@@ -51,7 +51,7 @@ const EMPOWERED_MORTAL_DRAW: u32 = 7300;
 const ATTACK: u64 = 0x1;
 const BLOCK: u64 = 0x4;
 #[allow(unused)]
-const JUMP: u64 =0x10;
+const JUMP: u64 = 0x10;
 #[allow(unused)]
 const SWITCH_PROSTHETIC: u64 = 0x400;
 #[allow(unused)]
@@ -401,7 +401,7 @@ fn get_item_id(uid: u32) -> Option<u64> {
     let inventory = unsafe { &game_data()?.as_ref().player_data?.as_ref().inventory_data?.as_ref().inventory };
     let uid = &uid;
     let item_id = _get_item_id(inventory, uid);
-    if item_id == 0xFFFFFFFF {
+    if item_id == 0 || item_id > 0xFFFF{
         return None;
     }
     Some(item_id)
