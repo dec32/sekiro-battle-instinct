@@ -59,6 +59,9 @@ const DODGE: u64 = 0x2000;
 #[allow(unused)]
 const USE_PROSTHETIC: u64 = 0x40040002; // you sure this is correct?
 
+// type alias
+type Ptr<T> = Option<NonNull<T>>;
+
 //----------------------------------------------------------------------------
 //
 //  Entry for the DLL
@@ -163,7 +166,7 @@ fn _chainload(path: &Path) -> Result<()> {
 //----------------------------------------------------------------------------
 
 static MOD: Mutex<Mod> = Mutex::new(Mod::new());
-static PROCESS_INPUT_ORIG: OnceLock<fn(*const c_void, usize) -> usize> = OnceLock::new();
+static PROCESS_INPUT_ORIG: OnceLock<fn(Ptr<InputHandler>, usize) -> usize> = OnceLock::new();
 
 fn modulate(path: &Path) {
     let path = path.join("battle_instinct.cfg");
@@ -186,7 +189,7 @@ fn _modulate(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn process_input(input_handler: &c_void, arg: usize) -> usize {
+fn process_input(input_handler: Ptr<InputHandler>, arg: usize) -> usize {
     MOD.lock().unwrap().process_input(input_handler);
     let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
     process_input_orig(input_handler, arg)
@@ -229,11 +232,11 @@ impl Mod {
         Ok(())
     }
 
-    fn process_input(&mut self, input_handler: *const c_void) {
+    fn process_input(&mut self, input_handler: Ptr<InputHandler>) -> Option<()> {
         // If you forget what a bitfield is please refer to Wikipedia
-        let action_bitfield = unsafe{ mem::transmute::<_, &mut u64>(input_handler as usize + 0x10) };
-        let attacking = *action_bitfield & ATTACK != 0;
-        let blocking = *action_bitfield & BLOCK != 0;
+        let action = unsafe { input_handler?.as_ref().action?.as_mut() };
+        let attacking = *action & ATTACK != 0;
+        let blocking = *action & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
         if attacked_just_now {
@@ -273,7 +276,7 @@ impl Mod {
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK, because the mod injects the BLOCK action for them
         if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.expired(){
-            *action_bitfield |= BLOCK;
+            *action |= BLOCK;
             self.injected_frames = 1;
         } else if self.injected_frames >= 1 {
             if self.cur_art == ASHINA_CROSS {
@@ -281,13 +284,13 @@ impl Mod {
                 // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
                 // 2. the player released the attack
                 if attacking && !blocking{
-                    *action_bitfield |= BLOCK;
+                    *action |= BLOCK;
                 } else {
                     self.injected_frames = 0;
                 }
             } else if self.injected_frames < BLOCK_INJECTION_DURATION {
                 // inject just a few frames for other art
-                *action_bitfield |= BLOCK;
+                *action |= BLOCK;
                 self.injected_frames += 1;
             }
         }
@@ -296,12 +299,13 @@ impl Mod {
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
         if self.supressed_frames < ATTACK_SUPRESSION_DURATION {
-            *action_bitfield &= !ATTACK;
+            *action &= !ATTACK;
             self.supressed_frames += 1;
         }
 
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
+        Some(())
     }
 
 
@@ -430,13 +434,15 @@ fn set_combat_art(uid: u32) -> bool {
 //----------------------------------------------------------------------------
 
 #[repr(C)]
-struct GameData { padding: [u8;8], player_data: Option<NonNull<PlayerData>> }
+struct GameData { padding: [u8;8], player_data: Ptr<PlayerData> }
 #[repr(C)]
-struct PlayerData { padding: [u8;1456], inventory_data: Option<NonNull<InventoryData>> }
+struct PlayerData { padding: [u8;1456], inventory_data: Ptr<InventoryData> }
 #[repr(C)]
 struct InventoryData { padding: [u8;16], inventory: c_void }
 #[repr(C)]
 struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
+#[repr(C)]
+struct InputHandler { padding: [u8;16], action: Ptr<u64>}
 
 //----------------------------------------------------------------------------
 //
