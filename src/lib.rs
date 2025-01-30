@@ -8,7 +8,7 @@ use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
 use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, ERROR_SUCCESS, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}}};
-use ::log::{debug, error, trace, warn};
+use ::log::{debug, error, trace};
 
 
 //----------------------------------------------------------------------------
