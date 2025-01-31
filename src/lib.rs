@@ -390,8 +390,8 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
-fn game_data() -> Option<NonNull<GameData>> {
-    unsafe { *(GAME_DATA as *const Option<NonNull<GameData>>) }
+fn game_data() -> Ptr<GameData> {
+    unsafe { *(GAME_DATA as *const Ptr<GameData>) }
 }
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
