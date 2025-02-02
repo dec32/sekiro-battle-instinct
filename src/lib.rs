@@ -211,9 +211,9 @@ struct Mod {
     cur_art: u32,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
-    injected_frames: u8,
-    supressed_frames: u8,
     equip_cooldown: u8,
+    attack_cooldown: u8,
+    injected_frames: u8,
     gamepad: Gamepad,
 }
 
@@ -224,10 +224,10 @@ impl Mod {
             buffer: InputBuffer::new(),
             blocking_last_frame: false,
             attacking_last_frame: false,
-            injected_frames: 0,
-            supressed_frames: u8::MAX,
-            cur_art: 0,
             equip_cooldown: 0,
+            attack_cooldown: 0,
+            injected_frames: 0,
+            cur_art: 0,
             gamepad: Gamepad::new(),
         }
     }
@@ -307,9 +307,9 @@ impl Mod {
         // if ATTACK|BLOCK happens way too quick after combat art switching
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
-        if self.supressed_frames < ATTACK_SUPRESSION_DURATION {
+        if self.attack_cooldown > 0 {
             *action &= !ATTACK;
-            self.supressed_frames += 1;
+            self.attack_cooldown -= 1;
         }
 
         self.attacking_last_frame = attacking;
@@ -325,8 +325,8 @@ impl Mod {
         }
         if set_combat_art(art) {
             self.cur_art = art;
-            self.supressed_frames = 0;
             self.equip_cooldown = art.equip_cooldown();
+            self.attack_cooldown = ATTACK_SUPRESSION_DURATION;
             return;
         }
 
