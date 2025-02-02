@@ -213,7 +213,7 @@ struct Mod {
     attacking_last_frame: bool,
     equip_cooldown: u8,
     attack_cooldown: u8,
-    injected_frames: u8,
+    injected_blocks: u8,
     gamepad: Gamepad,
 }
 
@@ -226,7 +226,7 @@ impl Mod {
             attacking_last_frame: false,
             equip_cooldown: 0,
             attack_cooldown: 0,
-            injected_frames: 0,
+            injected_blocks: 0,
             cur_art: 0,
             gamepad: Gamepad::new(),
         }
@@ -284,10 +284,10 @@ impl Mod {
 
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK, because the mod injects the BLOCK action for them
-        if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.expired(){
+        if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.expired() {
             *action |= BLOCK;
-            self.injected_frames = 1;
-        } else if self.injected_frames >= 1 {
+            self.injected_blocks = 1;
+        } else if self.injected_blocks >= 1 {
             if self.cur_art.is_sheathed() {
                 // hold BLOCK for sheathing attacks as long as ATTACK is held until:
                 // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
@@ -295,12 +295,12 @@ impl Mod {
                 if attacking && !blocking {
                     *action |= BLOCK;
                 } else {
-                    self.injected_frames = 0;
+                    self.injected_blocks = 0;
                 }
-            } else if self.injected_frames < BLOCK_INJECTION_DURATION {
+            } else if self.injected_blocks < BLOCK_INJECTION_DURATION {
                 // inject just a few frames for other art
                 *action |= BLOCK;
-                self.injected_frames += 1;
+                self.injected_blocks += 1;
             }
         }
 
