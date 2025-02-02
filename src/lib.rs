@@ -32,6 +32,8 @@ const SET_SKILL_SLOT: usize = 0x140D592F0;
 
 // combat art UIDs
 const ASHINA_CROSS: u32 = 5500;
+const ONE_MIND: u32 = 6100;
+
 const ICHIMONJI: u32 = 5300;
 const ICHIMONJI_DOUBLE: u32 = 7100;
 
@@ -255,9 +257,9 @@ impl Mod {
             self.buffer.update_keys(up, right, down, left)
         };
 
-        let desired_art = if self.cur_art == ASHINA_CROSS && attacking {
-            // keep using Ashina Cross when the player is waiting to strike
-            Some(ASHINA_CROSS)
+        let desired_art = if (self.cur_art == ASHINA_CROSS || self.cur_art == ONE_MIND) && attacking {
+            // keep using the same combat art when the player is still sheathing
+            Some(self.cur_art)
         } else if blocked_just_now && self.buffer.expired() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
@@ -279,11 +281,11 @@ impl Mod {
             *action |= BLOCK;
             self.injected_frames = 1;
         } else if self.injected_frames >= 1 {
-            if self.cur_art == ASHINA_CROSS {
-                // hold BLOCK for ashina cross as long as ATTACK is held until:
+            if self.cur_art == ASHINA_CROSS || self.cur_art == ONE_MIND {
+                // hold BLOCK for sheathing attacks as long as ATTACK is held until:
                 // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
                 // 2. the player released the attack
-                if attacking && !blocking{
+                if attacking && !blocking {
                     *action |= BLOCK;
                 } else {
                     self.injected_frames = 0;
