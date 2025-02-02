@@ -33,6 +33,7 @@ const SET_SKILL_SLOT: usize = 0x140D592F0;
 // combat art UIDs
 const ASHINA_CROSS: u32 = 5500;
 const ONE_MIND: u32 = 6100;
+const SAKURA_DANCE: u32 = 7700;
 
 const ICHIMONJI: u32 = 5300;
 const ICHIMONJI_DOUBLE: u32 = 7100;
@@ -212,6 +213,7 @@ struct Mod {
     attacking_last_frame: bool,
     injected_frames: u8,
     supressed_frames: u8,
+    equip_cooldown: u8,
     gamepad: Gamepad,
 }
 
@@ -225,6 +227,7 @@ impl Mod {
             injected_frames: 0,
             supressed_frames: u8::MAX,
             cur_art: 0,
+            equip_cooldown: 0,
             gamepad: Gamepad::new(),
         }
     }
@@ -257,7 +260,11 @@ impl Mod {
             self.buffer.update_keys(up, right, down, left)
         };
 
-        let desired_art = if (self.cur_art == ASHINA_CROSS || self.cur_art == ONE_MIND) && attacking {
+        let desired_art = if self.equip_cooldown != 0 {
+            // fix buggy behavior of sakura dacne, ashina cross and one mind
+            self.equip_cooldown -= 1;
+            Some(self.cur_art)
+        } else if attacking && self.cur_art.is_sheathed() {
             // keep using the same combat art when the player is still sheathing
             Some(self.cur_art)
         } else if blocked_just_now && self.buffer.expired() {
@@ -281,7 +288,7 @@ impl Mod {
             *action |= BLOCK;
             self.injected_frames = 1;
         } else if self.injected_frames >= 1 {
-            if self.cur_art == ASHINA_CROSS || self.cur_art == ONE_MIND {
+            if self.cur_art.is_sheathed() {
                 // hold BLOCK for sheathing attacks as long as ATTACK is held until:
                 // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
                 // 2. the player released the attack
@@ -319,6 +326,7 @@ impl Mod {
         if set_combat_art(art) {
             self.cur_art = art;
             self.supressed_frames = 0;
+            self.equip_cooldown = art.equip_cooldown();
             return;
         }
 
@@ -336,6 +344,25 @@ impl Mod {
     }
 }
 
+trait CombatArt {
+    fn is_sheathed(self) -> bool;
+    fn equip_cooldown(self) -> u8;
+}
+
+impl CombatArt for u32 {
+    fn is_sheathed(self) -> bool {
+        matches!(self, ASHINA_CROSS | ONE_MIND)
+    }
+
+    fn equip_cooldown(self) -> u8 {
+        match self {
+            ASHINA_CROSS => 10,
+            ONE_MIND => 10,
+            SAKURA_DANCE => 10,
+            _ => 0,
+        }
+    }
+}
 
 
 //----------------------------------------------------------------------------
