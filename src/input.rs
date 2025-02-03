@@ -7,7 +7,7 @@ use Input::*;
 // buffer behavior
 const INPUTS_CAP: usize = 3;
 const MAX_INTERVAL: u8 = 15;
-const MAX_ATTACK_DELAY: u8 = 25;
+const MAX_ATTACK_DELAY: u8 = 10;
 // joystick ergonomics
 const MAX_DISTANCE: u16 = i16::MAX as u16;
 const ORTHO_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
