@@ -20,7 +20,7 @@ const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Input {
     // orthogonal, possible on both keyboards and gamepads
-    Up = 0, Rt = 2, Dn = 4, Lt = 6, 
+    Up = 0, Rt = 2, Dn = 4, Lt = 6,
     // diagonal, only possible on gamepads
     Ur = 1, Dr = 3, Dl = 5, Ul = 7,
 }
@@ -132,7 +132,7 @@ impl InputBuffer {
             let input = if y_abs >= x_abs {
                 if y > 0 { Up } else { Dn }
             } else {
-                if x > 0 { Rt } else { Lt } 
+                if x > 0 { Rt } else { Lt }
             };
             let chebyshev_distance = u16::max(x_abs, y_abs);
             let threshold = if let Some(last) = self.inputs.last().cloned() {
@@ -154,7 +154,7 @@ impl InputBuffer {
                 None
             }
         };
-        
+
         if let Some(input) = input {
             if self.neutral || !self.ends_with(input) {
                 self.push(input);
@@ -200,7 +200,7 @@ impl InputBuffer {
         }
         self.inputs.push(input);
 
-        // fix faulty diagonal inputs 
+        // fix faulty diagonal inputs
         if self.inputs.len() == 2 {
             let a = self.inputs[0];
             let b = self.inputs[1];
@@ -230,8 +230,8 @@ impl InputBuffer {
     }
 
     pub fn expired(&self) -> bool {
-        if self.inputs.len() == 1 && (!self.neutral || self.keys_down != [false, false, false, false]) {
-            false
+        if self.inputs.len() == 1 {
+            self.neutral && self.keys_down == [false, false, false, false]
         } else {
             self.frames >= MAX_ATTACK_DELAY
         }
@@ -275,4 +275,3 @@ impl <T:Copy>InputsTrie<T> {
         idx
     }
 }
-
