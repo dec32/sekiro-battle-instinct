@@ -360,8 +360,8 @@ impl CombatArt for u32 {
 
     fn equip_cooldown(self) -> u16 {
         match self {
-            ASHINA_CROSS => 180,
-            ONE_MIND => 600,
+            ASHINA_CROSS => 80,
+            ONE_MIND => 80,
             SAKURA_DANCE => 120,
             _ => 0,
         }
