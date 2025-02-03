@@ -209,7 +209,7 @@ struct Mod {
     cur_art: u32,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
-    equip_cooldown: u8,
+    equip_cooldown: u16,
     attack_cooldown: u8,
     injected_blocks: u8,
     gamepad: Gamepad,
@@ -242,6 +242,8 @@ impl Mod {
         let blocking = *action & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
+        let releasing_attack = self.attacking_last_frame && !attacking;
+
         if attacked_just_now {
             trace!("Attack");
         }
@@ -302,6 +304,11 @@ impl Mod {
             }
         }
 
+        // disable art switching for a few seconds
+        if attacked_just_now && *action & BLOCK != 0 {
+            self.equip_cooldown = self.cur_art.equip_cooldown()
+        }
+
         // if ATTACK|BLOCK happens way too quick after combat art switching
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
@@ -323,7 +330,6 @@ impl Mod {
         }
         if set_combat_art(art) {
             self.cur_art = art;
-            self.equip_cooldown = art.equip_cooldown();
             self.attack_cooldown = ATTACK_SUPRESSION_DURATION;
             return;
         }
@@ -344,7 +350,7 @@ impl Mod {
 
 trait CombatArt {
     fn is_sheathed(self) -> bool;
-    fn equip_cooldown(self) -> u8;
+    fn equip_cooldown(self) -> u16;
 }
 
 impl CombatArt for u32 {
@@ -352,11 +358,11 @@ impl CombatArt for u32 {
         matches!(self, ASHINA_CROSS | ONE_MIND)
     }
 
-    fn equip_cooldown(self) -> u8 {
+    fn equip_cooldown(self) -> u16 {
         match self {
-            ASHINA_CROSS => 10,
-            ONE_MIND => 10,
-            SAKURA_DANCE => 10,
+            ASHINA_CROSS => 180,
+            ONE_MIND => 600,
+            SAKURA_DANCE => 120,
             _ => 0,
         }
     }
@@ -417,8 +423,8 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
-fn game_data() -> *mut GameData {
-    unsafe { *(GAME_DATA as *mut *mut GameData) }
+fn game_data() -> *const GameData {
+    unsafe { *(GAME_DATA as *const *const GameData) }
 }
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
