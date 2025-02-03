@@ -41,7 +41,7 @@ Press <kbd>Block</kbd> + <kbd>Attack</kbd> to perform the default combat art.
 
 ![](./docs/combat_art_1.webp)
 
-A combat art can also be bound a sequence of motion inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted, and the motion inputs can be **released** before attacking.
+A combat art can also be bound to a sequence of motion inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted, and the motion inputs can be **released** before attacking.
 
 ![](./docs/combat_art_2.webp)
 
