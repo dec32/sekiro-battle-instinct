@@ -242,7 +242,6 @@ impl Mod {
         let blocking = *action & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
-        let releasing_attack = self.attacking_last_frame && !attacking;
 
         if attacked_just_now {
             trace!("Attack");
