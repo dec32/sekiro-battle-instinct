@@ -41,13 +41,9 @@ Press <kbd>Block</kbd> + <kbd>Attack</kbd> to perform the default combat art.
 
 ![](./docs/combat_art_1.webp)
 
-You can also **release** the input and press <kbd>Block</kbd> + <kbd>Attack</kbd> right after to perform the same combat art. This is similar to how you perform special moves in fighting games.
+A combat art can also be bound a sequence of motion inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted, and the motion inputs can be **released** before attacking.
 
 ![](./docs/combat_art_2.webp)
-
-A combat art can also be bound a sequence of motion inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted.
-
-![](./docs/combat_art_3.webp)
 
 
 ## Customize
@@ -70,6 +66,5 @@ The file is a plain text table formatted with space characters. The first column
 
 The columns in between store the names of the combat arts. They're only there for reference. Feel free to modify or delete them.
 
-> [!NOTE] 
-> Binding two **adjecent** directions (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements. 
-
+> [!NOTE]
+> Binding two **adjecent** directions (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements.
