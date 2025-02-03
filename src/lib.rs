@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, ptr::NonNull, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
 use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
@@ -62,8 +62,6 @@ const DODGE: u64 = 0x2000;
 #[allow(unused)]
 const USE_PROSTHETIC: u64 = 0x40040002; // you sure this is correct?
 
-// type alias
-type Ptr<T> = Option<NonNull<T>>;
 
 //----------------------------------------------------------------------------
 //
@@ -81,7 +79,7 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
         let dll_path = PathBuf::from(OsString::from_wide(&buf[..len]));
         let dir_path = dll_path.parent().unwrap();
         chainload(dir_path);
-        modulate(dir_path);
+        modify(dir_path);
     }
     true
 }
@@ -169,18 +167,18 @@ fn _chainload(path: &Path) -> Result<()> {
 //----------------------------------------------------------------------------
 
 static MOD: Mutex<Mod> = Mutex::new(Mod::new());
-static PROCESS_INPUT_ORIG: OnceLock<fn(Ptr<InputHandler>, usize) -> usize> = OnceLock::new();
+static PROCESS_INPUT_ORIG: OnceLock<fn(*mut InputHandler, usize) -> usize> = OnceLock::new();
 
-fn modulate(path: &Path) {
+fn modify(path: &Path) {
     let path = path.join("battle_instinct.cfg");
     thread::spawn(||{
         // hooking fails if it starts too soon (MH_ERROR_UNSUPPORTED_FUNCTION)
         thread::sleep(HOOK_DELAY);
-        _modulate(path).inspect_err(|e|error!("Errored occured when modulating. {e}"))
+        _modify(path).inspect_err(|e|error!("Errored occured when modulating. {e}"))
     });
 }
 
-fn _modulate(path: PathBuf) -> Result<()> {
+fn _modify(path: PathBuf) -> Result<()> {
     MOD.lock().unwrap().load_config(&path)?;
     unsafe {
         let process_input_orig = MinHook::create_hook(
@@ -192,7 +190,7 @@ fn _modulate(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn process_input(input_handler: Ptr<InputHandler>, arg: usize) -> usize {
+fn process_input(input_handler: *mut InputHandler, arg: usize) -> usize {
     MOD.lock().unwrap().process_input(input_handler);
     let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
     process_input_orig(input_handler, arg)
@@ -237,9 +235,9 @@ impl Mod {
         Ok(())
     }
 
-    fn process_input(&mut self, input_handler: Ptr<InputHandler>) -> Option<()> {
+    fn process_input(&mut self, input_handler: *mut InputHandler) -> Option<()> {
         // If you forget what a bitfield is please refer to Wikipedia
-        let action = unsafe { input_handler?.as_ref().action?.as_mut() };
+        let action = unsafe { input_handler.as_ref()?.action.as_mut()? };
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
@@ -419,15 +417,15 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
-fn game_data() -> Ptr<GameData> {
-    unsafe { *(GAME_DATA as *const Ptr<GameData>) }
+fn game_data() -> *mut GameData {
+    unsafe { *(GAME_DATA as *mut *mut GameData) }
 }
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
 /// When putting things into item slots, the latter shall be used.
 fn get_item_id(uid: u32) -> Option<u64> {
-    let inventory = unsafe { &game_data()?.as_ref().player_data?.as_ref().inventory_data?.as_ref().inventory };
+    let inventory = unsafe { &game_data().as_ref()?.player_data.as_ref()?.inventory_data.as_ref()?.inventory };
     let uid = &uid;
     let item_id = _get_item_id(inventory, uid);
     if item_id == 0 || item_id > 0xFFFF{
@@ -463,15 +461,15 @@ fn set_combat_art(uid: u32) -> bool {
 //----------------------------------------------------------------------------
 
 #[repr(C)]
-struct GameData { padding: [u8;8], player_data: Ptr<PlayerData> }
+struct GameData { padding: [u8;8], player_data: *const PlayerData }
 #[repr(C)]
-struct PlayerData { padding: [u8;1456], inventory_data: Ptr<InventoryData> }
+struct PlayerData { padding: [u8;1456], inventory_data: *const InventoryData }
 #[repr(C)]
 struct InventoryData { padding: [u8;16], inventory: c_void }
 #[repr(C)]
 struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
 #[repr(C)]
-struct InputHandler { padding: [u8;16], action: Ptr<u64>}
+struct InputHandler { padding: [u8;16], action: *mut u64}
 
 //----------------------------------------------------------------------------
 //
