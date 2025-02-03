@@ -237,7 +237,7 @@ impl Mod {
 
     fn process_input(&mut self, input_handler: *mut InputHandler) -> Option<()> {
         // If you forget what a bitfield is please refer to Wikipedia
-        let action = unsafe { input_handler.as_ref()?.action.as_mut()? };
+        let action = unsafe { &mut input_handler.as_mut()?.action };
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
@@ -469,7 +469,7 @@ struct InventoryData { padding: [u8;16], inventory: c_void }
 #[repr(C)]
 struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
 #[repr(C)]
-struct InputHandler { padding: [u8;16], action: *mut u64}
+struct InputHandler { padding: [u8;16], action: u64}
 
 //----------------------------------------------------------------------------
 //
