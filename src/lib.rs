@@ -28,7 +28,7 @@ const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const GAME_DATA: usize = 0x143D5AAC0;
 const PROCESS_INPUT: usize = 0x140B2C190;
 const GET_ITEM_ID: usize = 0x140C3D680;
-const SET_SKILL_SLOT: usize = 0x140D592F0;
+const SET_SLOT: usize = 0x140D592F0;
 
 // combat art UIDs
 const ASHINA_CROSS: u32 = 5500;
@@ -465,7 +465,7 @@ fn set_combat_art(uid: u32) -> bool {
         combat_art_item_id: item_id
     };
     let equip_data = &equip_data;
-    _set_skill_slot(1, equip_data, true);
+    _set_slot(1, equip_data, true);
     return true;
 }
 
@@ -507,4 +507,4 @@ macro_rules! ext {
 ext!(fn _get_item_id(inventory: *const c_void, uid: *const u32) -> u64, GET_ITEM_ID);
 
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
-ext!(fn _set_skill_slot(equip_slot: isize, equip_data: *const EquipData, ignore_equip_lock: bool), SET_SKILL_SLOT);
+ext!(fn _set_slot(equip_slot: isize, equip_data: *const EquipData, ignore_equip_lock: bool), SET_SLOT);
