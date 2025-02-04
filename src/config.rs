@@ -41,11 +41,11 @@ impl Config {
                 continue;
             }
 
-            
             if matches!(inputs, "∅" | "空" | "none") {
                 config.default_art = Some(id);
             } else {
-                let inputs = inputs.chars()
+                let mut legal = true;
+                let mut inputs = inputs.chars()
                     .filter_map(|ch|match ch {
                         '↑'|'8'|'u'|'上' => Some(Up),
                         '→'|'6'|'r'|'右' => Some(Rt),
@@ -55,14 +55,16 @@ impl Config {
                         '↘'|'3' => Some(Dr),
                         '↙'|'1' => Some(Dl),
                         '↖'|'7' => Some(Ul),
-                        _ => None })
-                    .take(3)
+                        _ => {
+                            legal = false;
+                            None
+                        }})
                     .collect::<Inputs>();
                 // the last element of the line may not be the inputs but rather the name of the combat arts
-                // parsing names as inputs can produce empty inputs
-                if inputs.len() == 0 {
+                if !legal {
                     continue;
                 }
+                inputs.truncate(3);
                 // fault tolerance for keyboards
                 // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
                 if inputs.len() >= 2 {
@@ -70,7 +72,7 @@ impl Config {
                     reversed.push(inputs[1]);
                     reversed.push(inputs[0]);
                 }
-                // fault tolerance for joysticks. 
+                // fault tolerance for joysticks.
                 // example: if ↑↓ is used while ↑→↓ is not, treat ↑→↓ as ↑↓ so that players won't accidentally do semicircles
                 if inputs.len() == 2 && inputs[0] == inputs[1].opposite() {
                     for fault in [Up, Rt, Dn, Lt] {

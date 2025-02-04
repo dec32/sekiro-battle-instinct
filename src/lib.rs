@@ -444,7 +444,7 @@ fn get_item_id(uid: u32) -> Option<u64> {
     let inventory = unsafe { &game_data().as_ref()?.player_data.as_ref()?.inventory_data.as_ref()?.inventory };
     let uid = &uid;
     let item_id = _get_item_id(inventory, uid);
-    if item_id == 0 || item_id > 0xFFFF{
+    if item_id == 0 || item_id > 0xFFFF {
         return None;
     }
     Some(item_id)
@@ -485,7 +485,7 @@ struct InventoryData { padding: [u8;16], inventory: c_void }
 #[repr(C)]
 struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
 #[repr(C)]
-struct InputHandler { padding: [u8;16], action: u64}
+struct InputHandler { padding: [u8;16], action: u64 }
 
 //----------------------------------------------------------------------------
 //
