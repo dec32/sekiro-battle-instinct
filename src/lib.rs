@@ -282,6 +282,9 @@ impl Mod {
                 // switching to other arts without performing them while using sakura dance triggers
                 // the falling animation of senpo kick
                 if attacked_just_now || blocked_just_now {
+                    if desired_art != SAKURA_DANCE {
+                        trace!("Switching to {desired_art} while performing Sakura Dance.");
+                    }
                     self.set_combat_art(desired_art);
                 }
             } else {
@@ -290,8 +293,9 @@ impl Mod {
         }
 
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
-        // in such cases, players can perform combat arts without pressing BLOCK, because the mod injects the BLOCK action for them
-        if attacked_just_now && inputs.meant_for_art() && desired_art.is_some() && !self.buffer.expired() {
+        // in such cases, players can perform combat arts without pressing BLOCK,
+        // because the mod injects the BLOCK action for them
+        if attacked_just_now && desired_art.is_some() && inputs.meant_for_art() && !self.buffer.expired() {
             *action |= BLOCK;
             self.injected_blocks = 1;
         } else if self.injected_blocks >= 1 {
@@ -311,17 +315,18 @@ impl Mod {
             }
         }
 
-        // disable art switching for a few seconds
-        if attacked_just_now && *action & BLOCK != 0 {
-            self.equip_cooldown = self.cur_art.equip_cooldown()
-        }
-
         // if ATTACK|BLOCK happens way too quick after combat art switching
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
         if self.attack_cooldown > 0 {
             *action &= !ATTACK;
             self.attack_cooldown -= 1;
+        }
+
+        // if equipping happens too quick after performing Sakura Dance, Ashina Cross and One mind,
+        // weird bugs will be triggered.
+        if attacked_just_now && *action & BLOCK != 0 {
+            self.equip_cooldown = self.cur_art.equip_cooldown()
         }
 
         self.attacking_last_frame = attacking;
@@ -369,6 +374,7 @@ impl CombatArt for u32 {
         match self {
             ASHINA_CROSS => 75,
             ONE_MIND => 80,
+            SAKURA_DANCE => 60,
             _ => 0,
         }
     }
