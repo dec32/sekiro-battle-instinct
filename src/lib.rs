@@ -220,12 +220,12 @@ impl Mod {
         Mod {
             config: Config::new(),
             buffer: InputBuffer::new(),
+            cur_art: 0,
             blocking_last_frame: false,
             attacking_last_frame: false,
             equip_cooldown: 0,
             attack_cooldown: 0,
             injected_blocks: 0,
-            cur_art: 0,
             gamepad: Gamepad::new(),
         }
     }
@@ -278,7 +278,15 @@ impl Mod {
 
         // equip the desired combat art or the fallback version
         if let Some(desired_art) = desired_art {
-            self.set_combat_art(desired_art);
+            if self.cur_art == SAKURA_DANCE {
+                // switching to other arts without performing them while using sakura dance triggers
+                // the falling animation of senpo kick
+                if attacked_just_now || blocked_just_now {
+                    self.set_combat_art(desired_art);
+                }
+            } else {
+                self.set_combat_art(desired_art);
+            }
         }
 
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
@@ -289,7 +297,7 @@ impl Mod {
         } else if self.injected_blocks >= 1 {
             if self.cur_art.is_sheathed() {
                 // hold BLOCK for sheathing attacks as long as ATTACK is held until:
-                // 1. the player decides to hold BLOCK by themself (that usually means they want to cancel Ashina Cross)
+                // 1. the player decides to hold BLOCK by themself (that usually means cancelling)
                 // 2. the player released the attack
                 if attacking && !blocking {
                     *action |= BLOCK;
@@ -361,7 +369,6 @@ impl CombatArt for u32 {
         match self {
             ASHINA_CROSS => 75,
             ONE_MIND => 80,
-            SAKURA_DANCE => 60,
             _ => 0,
         }
     }
