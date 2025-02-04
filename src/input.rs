@@ -101,7 +101,6 @@ impl InputBuffer {
         }
     }
 
-    // TODO it should tell its caller if the inputs expired or not
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
         for (i, down) in [up, right, down, left].iter().cloned().enumerate() {

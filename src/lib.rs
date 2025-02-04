@@ -247,7 +247,6 @@ impl Mod {
             trace!("Attack");
         }
 
-        // TODO inject backward action for Nightjar Reversal
         // (0, 0) is filtered out so I can test the keyboard while the controller is still plugged in
         let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos|*pos != (0, 0)) {
             self.buffer.update_joystick(x, y)
@@ -460,7 +459,7 @@ fn set_combat_art(uid: u32) -> bool {
         return false;
     };
     let equip_data = EquipData {
-        padding: [0; 52],
+        anonymous: [0; 52],
         prosthetic_tool_item_id: 0,
         combat_art_item_id: item_id
     };
@@ -477,15 +476,15 @@ fn set_combat_art(uid: u32) -> bool {
 //----------------------------------------------------------------------------
 
 #[repr(C)]
-struct GameData { padding: [u8;8], player_data: *const PlayerData }
+struct GameData { anonymous: [u8;8], player_data: *const PlayerData }
 #[repr(C)]
-struct PlayerData { padding: [u8;1456], inventory_data: *const InventoryData }
+struct PlayerData { anonymous: [u8;1456], inventory_data: *const InventoryData }
 #[repr(C)]
-struct InventoryData { padding: [u8;16], inventory: c_void }
+struct InventoryData { anonymous: [u8;16], inventory: c_void }
 #[repr(C)]
-struct EquipData { padding: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
+struct EquipData { anonymous: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
 #[repr(C)]
-struct InputHandler { padding: [u8;16], action: u64 }
+struct InputHandler { anonymous: [u8;16], action: u64 }
 
 //----------------------------------------------------------------------------
 //
