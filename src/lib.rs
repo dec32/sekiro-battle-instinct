@@ -280,9 +280,9 @@ impl Mod {
         if let Some(desired_art) = desired_art {
             if self.cur_art == SAKURA_DANCE {
                 // switching combat arts while using Sakura Dance triggers the falling animation of High Monk
-                // to cancel that unexpected animation, block/attack need to take place
-                // thus the moment of switching is delayed to when block/attack happens
-                if attacked_just_now || blocked_just_now {
+                // to cancel that unexpected animation, block/combat art need to take place
+                // thus the moment of switching is delayed to when block/combat art happens
+                if blocked_just_now || (attacked_just_now && inputs.meant_for_art() && !self.buffer.expired()) {
                     self.set_combat_art(desired_art);
                 }
             } else {
