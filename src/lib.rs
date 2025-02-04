@@ -279,7 +279,7 @@ impl Mod {
         // equip the desired combat art or the fallback version
         if let Some(desired_art) = desired_art {
             if self.cur_art == SAKURA_DANCE {
-                // switching to other arts without performing them while using sakura dance triggers
+                // switching to other arts without performing any action while using sakura dance triggers
                 // the falling animation of senpo kick
                 if attacked_just_now || blocked_just_now {
                     if desired_art != SAKURA_DANCE {
