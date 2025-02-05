@@ -206,7 +206,7 @@ fn process_input(input_handler: *mut InputHandler, arg: usize) -> usize {
 struct Mod {
     config: Config,
     buffer: InputBuffer,
-    cur_art: u32,
+    cur_art: Option<u32>,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
     equip_cooldown: u16,
@@ -220,7 +220,7 @@ impl Mod {
         Mod {
             config: Config::new(),
             buffer: InputBuffer::new(),
-            cur_art: 0,
+            cur_art: None,
             blocking_last_frame: false,
             attacking_last_frame: false,
             equip_cooldown: 0,
@@ -261,10 +261,10 @@ impl Mod {
         let desired_art = if self.equip_cooldown != 0 {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
             self.equip_cooldown -= 1;
-            Some(self.cur_art)
+            self.cur_art
         } else if attacking && self.cur_art.is_sheathed() {
             // keep using the same combat art when the player is still sheathing
-            Some(self.cur_art)
+            self.cur_art
         } else if blocked_just_now && self.buffer.expired() {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
@@ -276,12 +276,14 @@ impl Mod {
         };
 
         // equip the desired combat art or the fallback version
+        let mut performed_art_just_now = blocking && attacked_just_now;
         if let Some(desired_art) = desired_art {
-            if self.cur_art == SAKURA_DANCE {
+            performed_art_just_now |= inputs.meant_for_art() && !self.buffer.expired() && attacked_just_now;
+            if self.cur_art == Some(SAKURA_DANCE) {
                 // switching combat arts while using Sakura Dance triggers the falling animation of High Monk
                 // to cancel that unexpected animation, block/combat art need to take place
                 // thus the moment of switching is delayed to when block/combat art happens
-                if blocked_just_now || (attacked_just_now && inputs.meant_for_art() && !self.buffer.expired()) {
+                if blocked_just_now || performed_art_just_now {
                     self.set_combat_art(desired_art);
                 }
             } else {
@@ -292,7 +294,7 @@ impl Mod {
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK,
         // because the mod injects the BLOCK action for them
-        if attacked_just_now && desired_art.is_some() && inputs.meant_for_art() && !self.buffer.expired() {
+        if performed_art_just_now {
             *action |= BLOCK;
             self.injected_blocks = 1;
         } else if self.injected_blocks >= 1 {
@@ -322,7 +324,7 @@ impl Mod {
 
         // if combat art switching happens too quick after performing certain combat arts
         // animation of other unrelated combat arts can be triggered
-        if attacked_just_now && *action & BLOCK != 0 && self.equip_cooldown == 0 {
+        if performed_art_just_now && self.equip_cooldown == 0 {
             self.equip_cooldown = self.cur_art.equip_cooldown()
         }
 
@@ -334,11 +336,11 @@ impl Mod {
 
     fn set_combat_art(&mut self, art: u32) {
         // equipping the same combat art again can unequip the combat art
-        if self.cur_art == art {
+        if self.cur_art == Some(art) {
             return;
         }
         if set_combat_art(art) {
-            self.cur_art = art;
+            self.cur_art = Some(art);
             self.attack_cooldown = ATTACK_SUPRESSION_DURATION;
             return;
         }
@@ -377,6 +379,15 @@ impl CombatArt for u32 {
     }
 }
 
+impl CombatArt for Option<u32> {
+    fn is_sheathed(self) -> bool {
+        self.map(CombatArt::is_sheathed).unwrap_or(false)
+    }
+
+    fn equip_cooldown(self) -> u16 {
+        self.map(CombatArt::equip_cooldown).unwrap_or(0)
+    }
+}
 
 //----------------------------------------------------------------------------
 //
