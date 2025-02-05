@@ -71,6 +71,6 @@ The columns in between store the names of the combat arts. They're only there fo
 
 ## Credits
 
-- [Tmsrise](https://github.com/tmsrise) (author of [Sekiro Weapon Wheel](https://www.nexusmods.com/sekiro/mods/1058)): Sharing the source code.
-- [ReaperAnon](https://github.com/ReaperAnon) (author of [Sekiro Hotkey System](https://www.nexusmods.com/sekiro/mods/1648)): Sharing the source code.
+- [Tmsrise](https://github.com/tmsrise): Sharing the source code of [Sekiro Weapon Wheel](https://www.nexusmods.com/sekiro/mods/1058).
+- [ReaperAnon](https://github.com/ReaperAnon): Sharing the source code of [Sekiro Hotkey System](https://www.nexusmods.com/sekiro/mods/1648).
 - [Yuzheng Wu](https://github.com/Persona-woo): Testing and improving input ergonomics.
