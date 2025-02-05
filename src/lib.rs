@@ -320,9 +320,9 @@ impl Mod {
             self.attack_cooldown -= 1;
         }
 
-        // if equipping happens too quick after performing Sakura Dance, Ashina Cross and One mind,
-        // weird bugs will be triggered.
-        if attacked_just_now && *action & BLOCK != 0 {
+        // if combat art switching happens too quick after performing certain combat arts
+        // animation of other unrelated combat arts can be triggered
+        if attacked_just_now && *action & BLOCK != 0 && self.equip_cooldown == 0 {
             self.equip_cooldown = self.cur_art.equip_cooldown()
         }
 
