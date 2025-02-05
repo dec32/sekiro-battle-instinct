@@ -2,7 +2,7 @@ mod log;
 mod input;
 mod config;
 
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, ptr, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
 use anyhow::{anyhow, Result};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
@@ -242,7 +242,6 @@ impl Mod {
         let blocking = *action & BLOCK != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
-
         if attacked_just_now {
             trace!("Attack");
         }
@@ -330,7 +329,7 @@ impl Mod {
 
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
-        Some(())
+        None
     }
 
 
@@ -447,6 +446,20 @@ fn game_data() -> *const GameData {
     unsafe { *(GAME_DATA as *const *const GameData) }
 }
 
+fn gamepad() -> *const Gamepad0 {
+    #[repr(C)]
+    struct Unknown0 { anonymous: [u8;0x18], unknown: *const Unknown1 }
+    #[repr(C)]
+    struct Unknown1 { anonymous: [u8;0x10], gamepad: *const Gamepad0 }
+    fn _gamepad() -> Option<*const Gamepad0> {
+        unsafe {
+            let unknown0 = *(0x143F42850 as *const *const Unknown0);
+            Some(unknown0.as_ref()?.unknown.as_ref()?.gamepad)
+        }
+    }
+    _gamepad().unwrap_or(ptr::null())
+}
+
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
 /// When putting things into item slots, the latter shall be used.
@@ -496,6 +509,14 @@ struct InventoryData { anonymous: [u8;16], inventory: c_void }
 struct EquipData { anonymous: [u8;52], combat_art_item_id: u64, prosthetic_tool_item_id: u64 }
 #[repr(C)]
 struct InputHandler { anonymous: [u8;16], action: u64 }
+#[repr(C)]
+struct Gamepad0 {
+    anonymous: [u8; 0x24C],
+    axis0: f32, anonymous0: u32,
+    axis1: f32, anonymous1: u32,
+    axis2: f32, anonymous2: u32,
+    axis3: f32, anonymous3: u32
+}
 
 //----------------------------------------------------------------------------
 //
