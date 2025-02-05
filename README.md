@@ -68,3 +68,9 @@ The columns in between store the names of the combat arts. They're only there fo
 
 > [!NOTE]
 > Binding two **adjecent** directions (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements.
+
+## Credits
+
+- [Tmsrise](https://github.com/tmsrise) (author of [Sekiro Weapon Wheel](https://www.nexusmods.com/sekiro/mods/1058)): Sharing the source code.
+- [ReaperAnon](https://github.com/ReaperAnon) (author of [Sekiro Hotkey System](https://www.nexusmods.com/sekiro/mods/1648)): Sharing the source code.
+- [Yuzheng Wu](https://github.com/Persona-woo): Testing and improving input ergonomics.
