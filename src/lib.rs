@@ -371,7 +371,7 @@ impl CombatArt for u32 {
     fn equip_cooldown(self) -> u16 {
         match self {
             ASHINA_CROSS => 75,
-            ONE_MIND => 80,
+            ONE_MIND => 240,
             SAKURA_DANCE => 60,
             _ => 0,
         }
@@ -446,6 +446,8 @@ fn game_data() -> *const GameData {
     unsafe { *(GAME_DATA as *const *const GameData) }
 }
 
+
+#[allow(unused)]
 fn gamepad() -> *const Gamepad0 {
     #[repr(C)]
     struct Unknown0 { anonymous: [u8;0x18], unknown: *const Unknown1 }
