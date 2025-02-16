@@ -1,6 +1,7 @@
 mod log;
 mod input;
 mod config;
+mod fps;
 
 use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, ptr, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
 use anyhow::{anyhow, Result};

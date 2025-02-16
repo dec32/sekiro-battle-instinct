@@ -3,11 +3,12 @@ use std::fmt::Debug;
 use arrayvec::ArrayVec;
 use log::trace;
 use Input::*;
+use crate::fps::Fps;
 
 // buffer behavior
 const INPUTS_CAP: usize = 3;
-const MAX_INTERVAL: u8 = 10;
-const MAX_ATTACK_DELAY: u8 = 10;
+const MAX_INTERVAL: u16 = 10;
+const MAX_ATTACK_DELAY: u16 = 10;
 // joystick ergonomics
 const MAX_DISTANCE: u16 = i16::MAX as u16;
 const ORTHO_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
@@ -85,9 +86,10 @@ impl InputsExt for Inputs {
 pub struct InputBuffer {
     inputs: Inputs,
     inputs_archive: Inputs,
-    frames: u8,
+    frames: u16,
     neutral: bool,
     keys_down: [bool; 4],
+    fps: Fps,
 }
 
 impl InputBuffer {
@@ -98,6 +100,7 @@ impl InputBuffer {
             frames: 0,
             neutral: true,
             keys_down: [false; 4],
+            fps: Fps::new(),
         }
     }
 
@@ -177,7 +180,8 @@ impl InputBuffer {
             self.inputs_archive.clear();
         }
 
-        if self.frames > MAX_INTERVAL {
+        let max_interval = MAX_INTERVAL * self.fps.get() / 60;
+        if self.frames > max_interval {
             trace!("--------------");
             self.inputs.clear();
         }
@@ -214,6 +218,7 @@ impl InputBuffer {
     }
 
     fn incr_frames(&mut self, updated: bool) {
+        self.fps.tick();
         if updated {
             self.frames = 0;
         } else {
@@ -232,7 +237,8 @@ impl InputBuffer {
         if self.inputs.len() == 1 {
             self.neutral && self.keys_down == [false, false, false, false]
         } else {
-            self.frames >= MAX_ATTACK_DELAY
+            let max_attack_delay = MAX_ATTACK_DELAY * self.fps.get() / 60;
+            self.frames >= max_attack_delay
         }
     }
 
