@@ -53,12 +53,11 @@ const EMPOWERED_MORTAL_DRAW: u32 = 7300;
 // action bitfields
 const ATTACK: u64 = 0x1;
 const BLOCK: u64 = 0x4;
-#[allow(unused)]
 const JUMP: u64 = 0x10;
+const DODGE: u64 = 0x2000;
+
 #[allow(unused)]
 const SWITCH_PROSTHETIC: u64 = 0x400;
-#[allow(unused)]
-const DODGE: u64 = 0x2000;
 #[allow(unused)]
 const USE_PROSTHETIC: u64 = 0x40040002; // you sure this is correct?
 
@@ -240,6 +239,8 @@ impl Mod {
         let action = unsafe { &mut input_handler.as_mut()?.action };
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
+        let jumping = *action & JUMP != 0;
+        let dodging = *action & DODGE != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
         if attacked_just_now {
@@ -303,7 +304,10 @@ impl Mod {
             *action |= BLOCK;
             self.injected_blocks = 1;
         } else if self.injected_blocks >= 1 {
-            if self.cur_art.is_sheathed() {
+            if jumping || dodging {
+                // DODGE and JUMP cancel the injection because they cancel the combat art itself
+                self.injected_blocks = 0
+            } else if self.cur_art.is_sheathed() {
                 // hold BLOCK for sheathing attacks as long as ATTACK is held until:
                 // 1. the player decides to hold BLOCK by themself (that usually means cancelling)
                 // 2. the player released the attack
