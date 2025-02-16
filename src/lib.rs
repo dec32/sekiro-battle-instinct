@@ -260,11 +260,15 @@ impl Mod {
 
         let desired_art = if self.equip_cooldown != 0 {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
-            if self.cur_art != Some(ONE_MIND) || !attacking {
+            if self.cur_art == Some(ONE_MIND) {
                 // One Mind has two windows for animation bugs to happen
                 // one after pressing ATTACK (sheathing) and one after releasing ATTACK (drawing)
                 // the current (ugly) solution is to apply the cooldown after pressing ATTACK,
                 // but only start counting it down after ATTACK is released
+                if !attacking || self.equip_cooldown != ONE_MIND.equip_cooldown() {
+                    self.equip_cooldown -= 1;
+                }
+            } else {
                 self.equip_cooldown -= 1;
             }
             self.cur_art
