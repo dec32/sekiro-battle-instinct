@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-const DEFAULT_FPS: u16 = 60;
+pub const DEFAULT_FPS: u16 = 60;
 const SAMPLE_SIZE: u16 = 60;
 const SAMPLE_COUNT: u16 = 30;
 
@@ -65,5 +65,14 @@ impl Fps {
 
     fn freezed(&self) -> bool {
         self.samples > SAMPLE_COUNT && !self.fps_unlocked
+    }
+}
+
+pub trait FrameCount {
+    fn adjust_to(self, fps: u16) -> u16; 
+}
+impl FrameCount for u16 {
+    fn adjust_to(self, fps: u16) -> u16 {
+        self * fps / DEFAULT_FPS
     }
 }

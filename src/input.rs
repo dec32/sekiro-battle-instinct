@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use arrayvec::ArrayVec;
 use log::trace;
 use Input::*;
-use crate::fps::Fps;
+
+use crate::frame::{FrameCount, DEFAULT_FPS};
 
 // buffer behavior
 const INPUTS_CAP: usize = 3;
@@ -89,7 +90,7 @@ pub struct InputBuffer {
     frames: u16,
     neutral: bool,
     keys_down: [bool; 4],
-    fps: Fps,
+    fps: u16,
 }
 
 impl InputBuffer {
@@ -100,8 +101,12 @@ impl InputBuffer {
             frames: 0,
             neutral: true,
             keys_down: [false; 4],
-            fps: Fps::new(),
+            fps: DEFAULT_FPS,
         }
+    }
+
+    pub fn update_fps(&mut self, fps: u16) {
+        self.fps = fps;
     }
 
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
@@ -180,7 +185,7 @@ impl InputBuffer {
             self.inputs_archive.clear();
         }
 
-        let max_interval = MAX_INTERVAL * self.fps.get() / 60;
+        let max_interval = MAX_INTERVAL.adjust_to(self.fps);
         if self.frames > max_interval {
             trace!("--------------");
             self.inputs.clear();
@@ -218,7 +223,6 @@ impl InputBuffer {
     }
 
     fn incr_frames(&mut self, updated: bool) {
-        self.fps.tick();
         if updated {
             self.frames = 0;
         } else {
@@ -237,7 +241,7 @@ impl InputBuffer {
         if self.inputs.len() == 1 {
             self.neutral && self.keys_down == [false, false, false, false]
         } else {
-            let max_attack_delay = MAX_ATTACK_DELAY * self.fps.get() / 60;
+            let max_attack_delay = MAX_ATTACK_DELAY.adjust_to(self.fps);
             self.frames >= max_attack_delay
         }
     }

@@ -1,10 +1,11 @@
 mod log;
 mod input;
 mod config;
-mod fps;
+mod frame;
 
 use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, ptr, sync::{Mutex, OnceLock}, thread, time::Duration, u8};
 use anyhow::{anyhow, Result};
+use frame::{Fps, FrameCount};
 use input::{InputBuffer, InputsExt};
 use minhook::MinHook;
 use config::Config;
@@ -204,12 +205,13 @@ fn process_input(input_handler: *mut InputHandler, arg: usize) -> usize {
 //----------------------------------------------------------------------------
 
 struct Mod {
+    fps: Fps,
     config: Config,
     buffer: InputBuffer,
     cur_art: Option<u32>,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
-    equip_cooldown: u16,
+    equip_cooldown: Cooldown,
     attack_cooldown: u8,
     injected_blocks: u8,
     gamepad: Gamepad,
@@ -218,12 +220,13 @@ struct Mod {
 impl Mod {
     const fn new() -> Mod {
         Mod {
+            fps: Fps::new(),
             config: Config::new(),
             buffer: InputBuffer::new(),
             cur_art: None,
             blocking_last_frame: false,
             attacking_last_frame: false,
-            equip_cooldown: 0,
+            equip_cooldown: Cooldown::zero(),
             attack_cooldown: 0,
             injected_blocks: 0,
             gamepad: Gamepad::new(),
@@ -248,6 +251,9 @@ impl Mod {
             trace!("Attack");
         }
 
+        self.fps.tick();
+        self.buffer.update_fps(self.fps.get());
+
         // (0, 0) is filtered out so I can test the keyboard while the controller is still plugged in
         let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos|*pos != (0, 0)) {
             self.buffer.update_joystick(x, y)
@@ -259,18 +265,18 @@ impl Mod {
             self.buffer.update_keys(up, right, down, left)
         };
 
-        let desired_art = if self.equip_cooldown != 0 {
+        let desired_art = if !self.equip_cooldown.done() {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
             if self.cur_art == Some(ONE_MIND) {
                 // One Mind has two windows for animation bugs to happen
                 // one after pressing ATTACK (sheathing) and one after releasing ATTACK (drawing)
                 // the current (ugly) solution is to apply the cooldown after pressing ATTACK,
                 // but only start counting it down after ATTACK is released
-                if !attacking || self.equip_cooldown != ONE_MIND.equip_cooldown() {
-                    self.equip_cooldown -= 1;
+                if !attacking || self.equip_cooldown.is_running() {
+                    self.equip_cooldown.decr();
                 }
             } else {
-                self.equip_cooldown -= 1;
+                self.equip_cooldown.decr();
             }
             self.cur_art
         } else if attacking && self.cur_art.is_sheathed() {
@@ -338,8 +344,9 @@ impl Mod {
 
         // if combat art switching happens too quick after performing certain combat arts
         // animation of other unrelated combat arts can be triggered
-        if performed_art_just_now && self.equip_cooldown == 0 {
-            self.equip_cooldown = self.cur_art.equip_cooldown()
+        if performed_art_just_now && self.equip_cooldown.done() {
+            let cooldown = self.cur_art.equip_cooldown().adjust_to(self.fps.get());
+            self.equip_cooldown = Cooldown::new(cooldown)
         }
 
         self.attacking_last_frame = attacking;
@@ -402,6 +409,35 @@ impl CombatArt for Option<u32> {
         self.map(CombatArt::equip_cooldown).unwrap_or(0)
     }
 }
+
+struct Cooldown {
+    value: u16,
+    running: bool,
+}
+
+impl Cooldown {
+    const fn zero() -> Cooldown {
+        Cooldown::new(0)
+    }
+
+    const fn new(value: u16) -> Cooldown {
+        Cooldown { value, running: false }
+    }
+
+    fn is_running(&self) -> bool {
+        self.running
+    }
+
+    fn decr(&mut self) {
+       self.value -= 1;
+       self.running = true;
+    }
+
+    fn done(&self) -> bool {
+        self.value == 0
+    }
+}
+
 
 //----------------------------------------------------------------------------
 //
