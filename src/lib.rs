@@ -74,7 +74,7 @@ const USE_PROSTHETIC: u64 = 0x40040002; // you sure this is correct?
 #[allow(non_snake_case, dead_code)]
 extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: *mut()) -> bool {
     if call_reason == DLL_PROCESS_ATTACH {
-        log::setup();
+        log::setup().ok();
         let mut buf: Vec<u16> = vec![0;128];
         let len = unsafe { GetModuleFileNameW(dll_module, buf.as_mut_slice()) } as usize;
         let dll_path = PathBuf::from(OsString::from_wide(&buf[..len]));
@@ -167,7 +167,7 @@ fn _chainload(path: &Path) -> Result<()> {
 //
 //----------------------------------------------------------------------------
 
-static MOD: Mutex<Mod> = Mutex::new(Mod::new());
+static MOD: Mutex<Mod> = Mutex::new(Mod::new_const());
 static PROCESS_INPUT_ORIG: OnceLock<fn(*mut InputHandler, usize) -> usize> = OnceLock::new();
 
 fn modify(path: &Path) {
@@ -218,18 +218,18 @@ struct Mod {
 }
 
 impl Mod {
-    const fn new() -> Mod {
+    const fn new_const() -> Mod {
         Mod {
-            fps: Fps::new(),
-            config: Config::new(),
-            buffer: InputBuffer::new(),
+            fps: Fps::new_const(),
+            config: Config::new_const(),
+            buffer: InputBuffer::new_const(),
             cur_art: None,
             blocking_last_frame: false,
             attacking_last_frame: false,
             equip_cooldown: Cooldown::zero(),
             attack_cooldown: 0,
             injected_blocks: 0,
-            gamepad: Gamepad::new(),
+            gamepad: Gamepad::new_const(),
         }
     }
 
@@ -286,10 +286,10 @@ impl Mod {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear();
-            self.config.default_art
+            self.config.slots.get_empty().art
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
-            self.config.arts.get(&inputs)
+            self.config.slots.get(&inputs).art
         };
 
         // equip the desired combat art or the fallback version
@@ -457,7 +457,7 @@ struct Gamepad {
 }
 
 impl Gamepad {
-    const fn new() -> Gamepad {
+    const fn new_const() -> Gamepad {
         Gamepad { connected: false, countdown: 0, latest_idx: 0 }
     }
 

@@ -13,7 +13,7 @@ pub struct Fps {
 }
 
 impl Fps {
-    pub const fn new() -> Fps {
+    pub const fn new_const() -> Fps {
         Fps {
             fps: DEFAULT_FPS,
             frames: 0,

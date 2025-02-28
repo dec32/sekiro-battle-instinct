@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use arrayvec::ArrayVec;
+use const_default::ConstDefault;
 use log::trace;
 use Input::*;
 
@@ -94,7 +95,7 @@ pub struct InputBuffer {
 }
 
 impl InputBuffer {
-    pub const fn new() -> InputBuffer {
+    pub const fn new_const() -> InputBuffer {
         InputBuffer {
             inputs: Inputs::new_const(),
             inputs_archive: Inputs::new_const(),
@@ -256,22 +257,26 @@ impl InputBuffer {
 
 /// An array-based trie that uses input sequence as keys
 pub struct InputsTrie<T> {
-    array: [Option<T>; usize::pow(9, INPUTS_CAP as u32)]
+    array: [T; usize::pow(9, INPUTS_CAP as u32)]
 }
 
-impl <T:Copy>InputsTrie<T> {
-    pub const fn new() -> InputsTrie<T> {
+impl<T:Copy + ConstDefault> InputsTrie<T> {
+    pub const fn new_const() -> InputsTrie<T> {
         InputsTrie {
-            array: [None; usize::pow(9, INPUTS_CAP as u32)]
+            array: [T::DEFAULT; usize::pow(9, INPUTS_CAP as u32)]
         }
     }
 
-    pub fn insert(&mut self, inputs: Inputs, ele: T) {
-        self.array[Self::idx(&inputs)] = Some(ele);
+    pub fn get(&self, inputs: &[Input]) -> T {
+        self.array[Self::idx(inputs)]
     }
 
-    pub fn get(&self, inputs: &[Input]) -> Option<T> {
-        self.array[Self::idx(inputs)]
+    pub fn get_empty(&self) -> T {
+        self.array[Self::idx(&[])]
+    }
+
+    pub fn insert(&mut self, inputs: Inputs, value: T) {
+        self.array[Self::idx(&inputs)] = value;
     }
 
     fn idx(inputs: &[Input]) -> usize {
