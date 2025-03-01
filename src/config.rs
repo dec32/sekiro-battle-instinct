@@ -4,17 +4,17 @@ use log::warn;
 use crate::input::{Input::*, Inputs, InputsTrie};
 
 pub struct Config {
-    pub slots: InputsTrie<Slot>,
+    pub skills: InputsTrie<Skill>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Slot {
+pub struct Skill {
     pub art: Option<u32>,
     pub tool: Option<u32>
 }
 
-impl ConstDefault for Slot {
-    const DEFAULT: Slot = Slot {
+impl ConstDefault for Skill {
+    const DEFAULT: Skill = Skill {
         art: None,
         tool: None
     };
@@ -23,7 +23,7 @@ impl ConstDefault for Slot {
 impl Config {
     pub const fn new_const() -> Config {
         Config {
-            slots: InputsTrie::new_const(),
+            skills: InputsTrie::new_const(),
         }
     }
 
@@ -62,23 +62,23 @@ impl<S: AsRef<str>> From<S> for Config {
             let mut possible_inputs = parse_possible_inputs(inputs).into_iter();
             if let Some(inputs) = possible_inputs.next() {
                 // the configured inputs
-                let mut slot = config.slots.get(&inputs);
+                let mut slot = config.skills.get(&inputs);
                 if is_art {
                     slot.art = Some(id)
                 } else {
                     slot.tool = Some(id)
                 }
-                config.slots.insert(inputs, slot);
+                config.skills.insert(inputs, slot);
 
                 // alternative form, they cannot overwrite the configured ones
                 for alt_inputs in possible_inputs {
-                    let mut slot = config.slots.get(&alt_inputs);
+                    let mut slot = config.skills.get(&alt_inputs);
                     if is_art {
                         slot.art.get_or_insert(id);
                     } else {
                         slot.tool.get_or_insert(id);
                     }
-                    config.slots.insert(alt_inputs, slot);
+                    config.skills.insert(alt_inputs, slot);
                 }
             }
         }
@@ -141,9 +141,9 @@ fn parse_possible_inputs(inputs: &str) -> Vec<Inputs> {
 
 #[test]
 fn test_load() {
-    impl Slot {
-        fn of(art: u32, tool: u32) -> Slot {
-            Slot {
+    impl Skill {
+        fn of(art: u32, tool: u32) -> Skill {
+            Skill {
                 art: Some(art).filter(|i|*i!=0),
                 tool: Some(tool).filter(|i|*i!=0),
             }
@@ -156,8 +156,8 @@ fn test_load() {
         70000 Loaded Shuriken            ←→
         ";
     let config = Config::from(raw);
-    let slots = config.slots;
-    assert_eq!(slots.get(&[Lt, Rt]), Slot::of(5600, 70000));
-    assert_eq!(slots.get(&[Rt, Lt]), Slot::of(7200, 70000));     // reversed for keyboard
-    assert_eq!(slots.get(&[Lt, Up, Rt]), Slot::of(5600, 70000)); // semicircle for joystick
+    let skills = config.skills;
+    assert_eq!(skills.get(&[Lt, Rt]), Skill::of(5600, 70000));
+    assert_eq!(skills.get(&[Rt, Lt]), Skill::of(7200, 70000));     // reversed for keyboard
+    assert_eq!(skills.get(&[Lt, Up, Rt]), Skill::of(5600, 70000)); // semicircle for joystick
 }
