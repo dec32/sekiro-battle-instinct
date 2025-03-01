@@ -146,7 +146,7 @@ fn process_input(input_handler: *mut game::InputHandler, arg: usize) -> usize {
         match _mod.process_input(input_handler) {
             Ok(_) => (),
             Err(e) => {
-                log::error!("{e}");
+                log::error!("Mod stopped working due to error: {e}");
                 guard.take();
             }
         }

@@ -49,11 +49,7 @@ const USE_PROSTHETIC: u64 = 0x40040002;
 #[allow(unused)]
 const SWITCH_PROSTHETIC: u64 = 0x400;
 
-// item slots
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CombatArtSlot { A = 1 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ProstheticSlot { A = 0, B = 2, C = 4 }
+
 
 
 //----------------------------------------------------------------------------
@@ -156,7 +152,8 @@ impl Mod {
         };
         if let Some(desired_tool) = desired_tool {
             let cur_slot = get_active_prosthetic_slot()?;
-            if locate_prosthetic_tool(desired_tool)? != Some(cur_slot) {
+            let tool_slot = locate_prosthetic_tool(desired_tool)?;
+            if tool_slot != Some(cur_slot) {
                 equip_prosthetic(desired_tool, cur_slot)?;
                 self.prosthetic_cooldown = PROSTHETIC_SUPRESSION_DURATION
             }
@@ -400,6 +397,24 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CombatArtSlot { 
+    Instance = 1 
+}
+impl CombatArtSlot {
+    fn into_idx(self) -> usize { self as usize }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProstheticSlot {
+     A = 0, 
+     B = 2, 
+     C = 4
+}
+impl ProstheticSlot {
+    fn into_idx(self) -> usize { self as usize }
+}
+
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
@@ -416,14 +431,14 @@ fn get_item_id(uid: u32) -> Result<Option<u32>> {
 
 
 fn set_combat_art(uid: u32) -> Result<bool> {
-    set_slot(uid, CombatArtSlot::A as usize)
+    set_slot(uid, CombatArtSlot::Instance.into_idx())
 }
 
 fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> Result<bool> {
-    set_slot(uid, slot as usize)
+    set_slot(uid, slot.into_idx())
 }
 
-fn set_slot(uid: u32, slot: usize) -> Result<bool> {
+fn set_slot(uid: u32, slot_index: usize) -> Result<bool> {
     // Validate if the player has already obtained the combat art
     // If so, there should be a corresponding item (with an item ID) representing that art
     // The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
@@ -432,7 +447,7 @@ fn set_slot(uid: u32, slot: usize) -> Result<bool> {
         return Ok(false);
     };
     let equip_data = &game::EquipData::new(item_id);
-    game::set_slot(slot, equip_data, true);
+    game::set_slot(slot_index, equip_data, true);
     return Ok(true);
 }
 

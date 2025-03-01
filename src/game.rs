@@ -8,7 +8,6 @@ use std::{mem, ptr};
 //----------------------------------------------------------------------------
 
 pub const PROCESS_INPUT: usize = 0x140B2C190;
-
 const GAME_DATA: usize = 0x143D5AAC0;
 const GET_ITEM_ID: usize = 0x140C3D680;
 const SET_SLOT: usize = 0x140D592F0;
@@ -44,17 +43,14 @@ pub struct InputHandler {
 
 #[repr(C)]
 pub struct EquipData { 
-    _0: [u8;52], pub item_id: u32
+    _0: [u8;56], pub item_id: u32,
 }
 
 impl EquipData {
     pub fn new(item_id: u32) -> EquipData {
-        EquipData {
-            _0: [0;52], item_id
-        }
+        EquipData { _0: [0;56], item_id }
     }
 }
-
 
 //----------------------------------------------------------------------------
 //
