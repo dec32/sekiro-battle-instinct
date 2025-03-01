@@ -46,8 +46,11 @@ const JUMP: u64 = 0x10;
 const DODGE: u64 = 0x2000;
 const USE_PROSTHETIC: u64 = 0x40040002;
 
-#[allow(unused)]
-const SWITCH_PROSTHETIC: u64 = 0x400;
+// slot index
+const COMBAT_ART_SLOT: usize = 1;
+const PROSTHETIC_SLOT_0: usize = 0;
+const PROSTHETIC_SLOT_1: usize = 2;
+const PROSTHETIC_SLOT_2: usize = 4;
 
 
 
@@ -397,24 +400,6 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CombatArtSlot { 
-    Instance = 1 
-}
-impl CombatArtSlot {
-    fn into_idx(self) -> usize { self as usize }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ProstheticSlot {
-     A = 0, 
-     B = 2, 
-     C = 4
-}
-impl ProstheticSlot {
-    fn into_idx(self) -> usize { self as usize }
-}
-
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
@@ -431,11 +416,11 @@ fn get_item_id(uid: u32) -> Result<Option<u32>> {
 
 
 fn set_combat_art(uid: u32) -> Result<bool> {
-    set_slot(uid, CombatArtSlot::Instance.into_idx())
+    set_slot(uid, COMBAT_ART_SLOT)
 }
 
-fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> Result<bool> {
-    set_slot(uid, slot.into_idx())
+fn equip_prosthetic(uid: u32, slot: usize) -> Result<bool> {
+    set_slot(uid, slot)
 }
 
 fn set_slot(uid: u32, slot_index: usize) -> Result<bool> {
@@ -451,24 +436,24 @@ fn set_slot(uid: u32, slot_index: usize) -> Result<bool> {
     return Ok(true);
 }
 
-fn get_active_prosthetic_slot() -> Result<ProstheticSlot> {
+fn get_active_prosthetic_slot() -> Result<usize> {
     let active_prosthetic = player_data()?.activte_prosthetic;
     let active_slot = match active_prosthetic {
-        0 => ProstheticSlot::A,
-        1 => ProstheticSlot::B,
-        2 => ProstheticSlot::C,
+        0 => PROSTHETIC_SLOT_0,
+        1 => PROSTHETIC_SLOT_1,
+        2 => PROSTHETIC_SLOT_2,
         _ => return Err(Error::Unreachable)
     };
     Ok(active_slot)
 }
 
-fn locate_prosthetic_tool(uid: u32) -> Result<Option<ProstheticSlot>> {
+fn locate_prosthetic_tool(uid: u32) -> Result<Option<usize>> {
     let slots = player_data()?.equiped_items;
     log::trace!("slots: {slots:?}");
     let Some(item_id) = get_item_id(uid)? else {
         return Ok(None)
     };
-    for slot in [ProstheticSlot::A, ProstheticSlot::B, ProstheticSlot::C] {
+    for slot in [PROSTHETIC_SLOT_0, PROSTHETIC_SLOT_1, PROSTHETIC_SLOT_2] {
         if slots[slot as usize] == item_id {
             return Ok(Some(slot));
         }
@@ -487,7 +472,6 @@ fn player_data<'a>() -> Result<&'a game::PlayerData> {
 fn inventory_data<'a>() -> Result<&'a game::InventoryData> {
     unsafe { player_data()?.inventory_data.try_ref("inventory_data") }
 }
-
 
 
 //----------------------------------------------------------------------------
