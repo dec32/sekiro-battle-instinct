@@ -8,13 +8,11 @@ use crate::{config, frame, game::{self}, input};
 
 //----------------------------------------------------------------------------
 //
-//  Some basic constants
+//  Basic constants
 //
 //----------------------------------------------------------------------------
 
 // MOD behavior
-const XUSER_MAX_COUNT: u32 = 3;
-const XINPUT_RETRY_INTERVAL: u16 = 300;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
@@ -23,19 +21,14 @@ const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
 const ASHINA_CROSS: u32 = 5500;
 const ONE_MIND: u32 = 6100;
 const SAKURA_DANCE: u32 = 7700;
-
 const ICHIMONJI: u32 = 5300;
 const ICHIMONJI_DOUBLE: u32 = 7100;
-
 const PRAYING_STRIKES: u32 = 5900;
 const PRAYING_STRIKES_EXORCISM: u32 = 7500;
-
 const SENPO_LEAPING_KICKS: u32 = 5800;
 const HIGH_MONK: u32 = 7400;
-
 const SHADOWRUSH: u32 = 6000;
 const SHADOWFALL: u32 = 7600;
-
 const MORTAL_DRAW: u32 = 5700;
 const EMPOWERED_MORTAL_DRAW: u32 = 7300;
 
@@ -51,8 +44,6 @@ const COMBAT_ART_SLOT: usize = 1;
 const PROSTHETIC_SLOT_0: usize = 0;
 const PROSTHETIC_SLOT_1: usize = 2;
 const PROSTHETIC_SLOT_2: usize = 4;
-
-
 
 
 //----------------------------------------------------------------------------
@@ -147,12 +138,17 @@ impl Mod {
             self.buffer.update_keys(up, right, down, left)
         };
 
-        // equip the desired tool just when USE_PROTHSTETIC is presed
-        let desired_tool = if used_tool_just_now && !self.buffer.expired() {
-            self.config.skills.get(&inputs).tool
+        // prosthetic tools
+        let desired_tool = if used_tool_just_now {
+            if self.buffer.expired() {
+                self.config.skills.get_empty().tool
+            } else {
+                self.config.skills.get(&inputs).tool
+            }
         } else {
             None
         };
+
         if let Some(desired_tool) = desired_tool {
             let cur_slot = get_active_prosthetic_slot()?;
             let tool_slot = locate_prosthetic_tool(desired_tool)?;
@@ -348,7 +344,7 @@ impl Cooldown {
 
 //----------------------------------------------------------------------------
 //
-//  Wrappers for Windows APIs
+//  Wrappers of Windows APIs
 //
 //----------------------------------------------------------------------------
 
@@ -364,6 +360,8 @@ struct Gamepad {
 }
 
 impl Gamepad {
+    const XUSER_MAX_COUNT: u32 = 3;
+    const XINPUT_RETRY_INTERVAL: u16 = 300;
     const fn new_const() -> Gamepad {
         Gamepad { connected: false, countdown: 0, latest_idx: 0 }
     }
@@ -377,8 +375,8 @@ impl Gamepad {
         }
         // checking controllers
         let mut xinput_state = unsafe { mem::zeroed() };
-        for idx in self.latest_idx..self.latest_idx + XUSER_MAX_COUNT {
-            let idx = idx % XUSER_MAX_COUNT;
+        for idx in self.latest_idx..self.latest_idx + Self::XUSER_MAX_COUNT {
+            let idx = idx % Self::XUSER_MAX_COUNT;
             let res = unsafe { XInputGetState(idx, &mut xinput_state) };
             if res == ERROR_SUCCESS.0 {
                 self.connected = true;
@@ -388,7 +386,7 @@ impl Gamepad {
         }
         // failed. start countdown
         self.connected = false;
-        self.countdown = XINPUT_RETRY_INTERVAL;
+        self.countdown = Self::XINPUT_RETRY_INTERVAL;
         return None;
     }
 }
@@ -476,7 +474,7 @@ fn inventory_data<'a>() -> Result<&'a game::InventoryData> {
 
 //----------------------------------------------------------------------------
 //
-//  Map None to Error::Nil for pointer dereference
+//  Map `None` to `Error::Nil` for pointer dereference
 //
 //----------------------------------------------------------------------------
 

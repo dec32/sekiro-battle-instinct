@@ -151,13 +151,17 @@ fn test_load() {
     }
 
     let raw = "
+        7100  Ichimonji: Double           ∅
+        70000 Loaded Shuriken             ∅
         5600  Floating Passage           ←→
         7200  Spiral Clound Passage      →←
-        70000 Loaded Shuriken            ←→
+        74000 Mist Raven                 ←→
         ";
     let config = Config::from(raw);
     let skills = config.skills;
-    assert_eq!(skills.get(&[Lt, Rt]), Skill::of(5600, 70000));
-    assert_eq!(skills.get(&[Rt, Lt]), Skill::of(7200, 70000));     // reversed for keyboard
-    assert_eq!(skills.get(&[Lt, Up, Rt]), Skill::of(5600, 70000)); // semicircle for joystick
+    assert_eq!(skills.get(&[]), skills.get_empty());
+    assert_eq!(skills.get(&[]), Skill::of(7100, 70000));
+    assert_eq!(skills.get(&[Lt, Rt]), Skill::of(5600, 74000));
+    assert_eq!(skills.get(&[Rt, Lt]), Skill::of(7200, 74000));     // reversed for keyboard
+    assert_eq!(skills.get(&[Lt, Up, Rt]), Skill::of(5600, 74000)); // semicircle for joystick
 }
