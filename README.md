@@ -1,6 +1,6 @@
 # Battle Instinct
 
-Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to perform multiple combat arts using motion inputs.
+Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to use combat arts and prosthetic tools with **motion inputs**, without manually switching between them.
 
 The MOD supports both MNK and gamepads.
 
@@ -10,7 +10,7 @@ Click link below to download the MOD.
 
 [![[DOWNLOAD]](https://img.shields.io/badge/DOWNLOAD-battle--instinct__x64.zip-blue)](https://github.com/dec32/sekiro-battle-instinct/releases/latest/download/battle-instinct_x64.zip)
 
-To install the MOD, simply unzip the archive into the game directory (usually `C:\Program Files (x86)\Steam\steamapps\common\Sekiro`). You should have the following 2 files next to `sekiro.exe`:
+To install it, unzip the archive into the game directory (usually `C:\Program Files (x86)\Steam\steamapps\common\Sekiro`). You should have the following 2 files next to `sekiro.exe`:
 
 1. `dinput8.dll`
 2. `battle_instinct.cfg`
@@ -28,6 +28,7 @@ Sekiro/
 ├─ sekiro.exe
 ├─ ...
 ```
+
 The MOD will automatically chain load the renamed `.dll` files for you.
 
 
@@ -45,6 +46,7 @@ A combat art can also be bound to a sequence of motion inputs. When performing s
 
 ![](./docs/combat_art_2.webp)
 
+Prosthetic tools follow similar principles.
 
 ## Customize
 
@@ -53,21 +55,24 @@ You can customize your control scheme by editing `battle_instinct.cfg`. Here's a
 ```
 # This is a line of comment
 5300  Ichimonji
-5600  Floating Passage  ∅
-5200  Nightjar Slash    ↑
-7600  Shadowfall        ↑↑
+7100  Ichimonji: Double  ∅
+5200  Nightjar Slash     ↑
+7600  Shadowfall         ↑↑
+70000 Loaded Shuriken
+70500 Lazulite Shuriken  ∅
+78300 Spiral Spear       ↑↑
 ```
 
-The file is a plain text table formatted with space characters. The first column stores the UIDs of the combat arts and the last column specifies how you perform the combat arts. In the last column you can write:
+The file is a plain text table formatted with whitespace characters. The first column stores the UIDs of the skills (combat arts or prosthetic tools). The last column specifies how you perform the skills. In the last column you can write:
 
-1. Nothing, which means this combat art is ignored.
-2. `∅`, which means this is the default combat art.
+1. Nothing, which means this skill is ignored.
+2. `∅`, which means this is the default skill.
 3. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding motion inputs.
 
-The columns in between store the names of the combat arts. They're only there for reference. Feel free to modify or delete them.
+The columns in between store the names of the skills. They're only there for reference. Feel free to modify or delete them.
 
 > [!NOTE]
-> Binding two **adjecent** directions (such as `↓→`) to a combat art is not recommended because this kind of inputs can be used for diagonal movements.
+> Binding two **adjecent** directions (such as `↓→`) to a skill is not recommended because this kind of inputs can be used for diagonal movements.
 
 ## Credits
 
