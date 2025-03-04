@@ -271,10 +271,6 @@ impl<T:Copy + ConstDefault> InputsTrie<T> {
         self.array[Self::idx(inputs)]
     }
 
-    pub fn get_empty(&self) -> T {
-        self.array[Self::idx(&[])]
-    }
-
     pub fn insert(&mut self, inputs: Inputs, value: T) {
         self.array[Self::idx(&inputs)] = value;
     }

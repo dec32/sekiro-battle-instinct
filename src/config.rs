@@ -4,7 +4,7 @@ use log::warn;
 use crate::input::{Input::*, Inputs, InputsTrie};
 
 pub struct Config {
-    pub skills: InputsTrie<Skill>,
+    skills: InputsTrie<Skill>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -30,6 +30,14 @@ impl Config {
     pub fn load(path: impl AsRef<Path>) -> io::Result<Config> {
         let file = fs::read_to_string(path)?.to_ascii_lowercase();
         Ok(file.into())
+    }
+
+    pub fn get_skill(&mut self, inputs: &Inputs) -> Skill {
+        self.skills.get(inputs)
+    }
+
+    pub fn get_default_skill(&mut self) -> Skill {
+        self.skills.get(&[])
     }
 }
 
@@ -159,7 +167,6 @@ fn test_load() {
         ";
     let config = Config::from(raw);
     let skills = config.skills;
-    assert_eq!(skills.get(&[]), skills.get_empty());
     assert_eq!(skills.get(&[]), Skill::of(7100, 70000));
     assert_eq!(skills.get(&[Lt, Rt]), Skill::of(5600, 74000));
     assert_eq!(skills.get(&[Rt, Lt]), Skill::of(7200, 74000));     // reversed for keyboard

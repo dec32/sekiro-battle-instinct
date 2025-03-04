@@ -141,9 +141,9 @@ impl Mod {
         // prosthetic tools
         let desired_tool = if used_tool_just_now {
             if self.buffer.expired() {
-                self.config.skills.get_empty().tool
+                self.config.get_default_skill().tool
             } else {
-                self.config.skills.get(&inputs).tool
+                self.config.get_default_skill().tool
             }
         } else {
             None
@@ -185,10 +185,10 @@ impl Mod {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear();
-            self.config.skills.get_empty().art
+            self.config.get_default_skill().art
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
-            self.config.skills.get(&inputs).art
+            self.config.get_skill(&inputs).art
         };
 
         // equip the desired combat art or the fallback version
