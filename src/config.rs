@@ -149,12 +149,11 @@ fn parse_possible_inputs(inputs: &str) -> Vec<Inputs> {
 
 #[test]
 fn test_load() {
-    impl Skill {
-        fn of(art: u32, tool: u32) -> Skill {
-            Skill {
-                art: Some(art).filter(|i|*i!=0),
-                tool: Some(tool).filter(|i|*i!=0),
-            }
+
+    fn skill(art: u32, tool: u32) -> Skill {
+        Skill {
+            art: Some(art).filter(|i|*i!=0),
+            tool: Some(tool).filter(|i|*i!=0),
         }
     }
 
@@ -167,8 +166,8 @@ fn test_load() {
         ";
     let config = Config::from(raw);
     let skills = config.skills;
-    assert_eq!(skills.get(&[]), Skill::of(7100, 70000));
-    assert_eq!(skills.get(&[Lt, Rt]), Skill::of(5600, 74000));
-    assert_eq!(skills.get(&[Rt, Lt]), Skill::of(7200, 74000));     // reversed for keyboard
-    assert_eq!(skills.get(&[Lt, Up, Rt]), Skill::of(5600, 74000)); // semicircle for joystick
+    assert_eq!(skills.get(&[]), skill(7100, 70000));
+    assert_eq!(skills.get(&[Lt, Rt]), skill(5600, 74000));
+    assert_eq!(skills.get(&[Rt, Lt]), skill(7200, 74000));     // reversed for keyboard
+    assert_eq!(skills.get(&[Lt, Up, Rt]), skill(5600, 74000)); // semicircle for joystick
 }

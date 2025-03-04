@@ -62,7 +62,10 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self, f)
+        match self {
+            Error::Nil(name) => write!(f, "Field `{name}` is null."),
+            Error::Unreachable => write!(f, "Reached unreachable code."),
+        }
     }
 }
 
@@ -491,20 +494,20 @@ trait TryMut {
 impl<T> TryRef for *const T {
     type Value = T;
     unsafe fn try_ref<'a>(self, name: &'static str) -> Result<&'a T> {
-        self.as_ref().ok_or(Error::Nil(name))
+        unsafe { self.as_ref().ok_or(Error::Nil(name)) }
     }
 }
 
 impl<T> TryRef for *mut T {
     type Value = T;
     unsafe fn try_ref<'a>(self, name: &'static str) -> Result<&'a T> {
-        self.as_ref().ok_or(Error::Nil(name))
+        unsafe { self.as_ref().ok_or(Error::Nil(name)) }
     }
 }
 
 impl<T> TryMut for *mut T {
     type Value = T;
     unsafe fn try_mut<'a>(self, name: &'static str) -> Result<&'a mut T> {
-        self.as_mut().ok_or(Error::Nil(name))
+        unsafe { self.as_mut().ok_or(Error::Nil(name)) }
     }
 }
