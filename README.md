@@ -8,7 +8,7 @@ The MOD supports both MNK and gamepads.
 
 Click link below to download the MOD.
 
-[![[DOWNLOAD]](https://img.shields.io/badge/DOWNLOAD-battle--instinct__x64.zip-blue)](https://github.com/dec32/sekiro-battle-instinct/releases/latest/download/battle-instinct_x64.zip)
+[![[DOWNLOAD]](https://img.shields.io/badge/DOWNLOAD-battle--instinct.zip-blue)](https://github.com/dec32/sekiro-battle-instinct/releases/latest/download/battle-instinct.zip)
 
 To install it, unzip the archive into the game directory (usually `C:\Program Files (x86)\Steam\steamapps\common\Sekiro`). You should have the following 2 files next to `sekiro.exe`:
 
