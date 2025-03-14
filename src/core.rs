@@ -1,4 +1,4 @@
-use std::{io, mem, path::Path};
+use std::{io, mem, num::NonZero, path::Path};
 use frame::{Fps, FrameCount};
 use input::{InputBuffer, InputsExt};
 use config::Config;
@@ -40,10 +40,10 @@ const DODGE: u64 = 0x2000;
 const USE_PROSTHETIC: u64 = 0x40040002;
 
 // slot index
-const COMBAT_ART_SLOT: usize = 1;
-const PROSTHETIC_SLOT_0: usize = 0;
-const PROSTHETIC_SLOT_1: usize = 2;
-const PROSTHETIC_SLOT_2: usize = 4;
+const COMBAT_ART_SLOT: u8 = 1;
+const PROSTHETIC_SLOT_0: u8 = 0;
+const PROSTHETIC_SLOT_1: u8 = 2;
+const PROSTHETIC_SLOT_2: u8 = 4;
 
 //----------------------------------------------------------------------------
 //
@@ -372,15 +372,25 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
+type ItemId = NonZero<u32>;
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProstheticSlot {
+    S0 = PROSTHETIC_SLOT_0,
+    S1 = PROSTHETIC_SLOT_1,
+    S2 = PROSTHETIC_SLOT_2,
+}
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
 /// When putting things into item slots, the latter shall be used.
-fn get_item_id(uid: u32) -> Option<u32> {
+fn get_item_id(uid: u32) -> Option<ItemId> {
     let inventory = &inventory_data().inventory;
     let uid = &uid;
     let item_id = game::get_item_id(inventory, uid);
-    if item_id == 0 || item_id > 0xFFFF {
+    let item_id = ItemId::try_from(item_id).ok()?;
+    if item_id.get() > 0xFFFF {
         return None;
     }
     Some(item_id)
@@ -388,11 +398,11 @@ fn get_item_id(uid: u32) -> Option<u32> {
 
 
 fn set_combat_art(uid: u32) -> bool {
-    set_slot(uid, COMBAT_ART_SLOT)
+    set_slot(uid, COMBAT_ART_SLOT as usize)
 }
 
-fn equip_prosthetic(uid: u32, slot: usize) -> bool {
-    set_slot(uid, slot)
+fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> bool {
+    set_slot(uid, slot as usize)
 }
 
 fn set_slot(uid: u32, slot_index: usize) -> bool {
@@ -403,30 +413,30 @@ fn set_slot(uid: u32, slot_index: usize) -> bool {
     let Some(item_id) = get_item_id(uid) else {
         return false;
     };
-    let equip_data = &game::EquipData::new(item_id);
+    let equip_data = &game::EquipData::new(item_id.get());
     game::set_slot(slot_index, equip_data, true);
     return true;
 }
 
-fn get_active_prosthetic_slot() -> usize {
+fn get_active_prosthetic_slot() -> ProstheticSlot {
     let active_prosthetic = player_data().activte_prosthetic;
     let active_slot = match active_prosthetic {
-        0 => PROSTHETIC_SLOT_0,
-        1 => PROSTHETIC_SLOT_1,
-        2 => PROSTHETIC_SLOT_2,
+        0 => ProstheticSlot::S0,
+        1 => ProstheticSlot::S1,
+        2 => ProstheticSlot::S2,
         illegal_slot => unreachable!("Illegal active prosthetic slot: {illegal_slot}")
     };
     active_slot
 }
 
-fn locate_prosthetic_tool(uid: u32) -> Option<usize> {
+fn locate_prosthetic_tool(uid: u32) -> Option<ProstheticSlot> {
     let slots = player_data().equiped_items;
     log::trace!("slots: {slots:?}");
     let Some(item_id) = get_item_id(uid) else {
         return None
     };
-    for slot in [PROSTHETIC_SLOT_0, PROSTHETIC_SLOT_1, PROSTHETIC_SLOT_2] {
-        if slots[slot as usize] == item_id {
+    for slot in [ProstheticSlot::S0, ProstheticSlot::S1, ProstheticSlot::S2] {
+        if slots[slot as usize] == item_id.get() {
             return Some(slot);
         }
     }
