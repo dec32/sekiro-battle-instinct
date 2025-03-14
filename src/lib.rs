@@ -116,7 +116,7 @@ fn _chainload(path: &Path) -> Result<()> {
 //----------------------------------------------------------------------------
 
 const HOOK_DELAY: Duration = Duration::from_secs(10);
-static MOD: Mutex<Option<Mod>> = Mutex::new(Some(Mod::new_const()));
+static MOD: Mutex<Mod> = Mutex::new(Mod::new_const());
 static PROCESS_INPUT_ORIG: OnceLock<fn(*mut game::InputHandler, usize) -> usize> = OnceLock::new();
 
 fn modify(path: &Path) {
@@ -129,7 +129,7 @@ fn modify(path: &Path) {
 }
 
 fn _modify(path: PathBuf) -> Result<()> {
-    MOD.lock().unwrap().as_mut().unwrap().load_config(&path)?;
+    MOD.lock().unwrap().load_config(&path)?;
     unsafe {
         let process_input_orig = MinHook::create_hook(
             game::PROCESS_INPUT as *mut c_void,
@@ -141,16 +141,7 @@ fn _modify(path: PathBuf) -> Result<()> {
 }
 
 fn process_input(input_handler: *mut game::InputHandler, arg: usize) -> usize {
-    let mut guard = MOD.lock().unwrap();
-    if let Some(_mod) = guard.as_mut() {
-        match _mod.process_input(input_handler) {
-            Ok(_) => (),
-            Err(e) => {
-                log::error!("Mod stopped working due to error: {e}");
-                guard.take();
-            }
-        }
-    }
+    MOD.lock().unwrap().process_input(input_handler);
     let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
     process_input_orig(input_handler, arg)
 }

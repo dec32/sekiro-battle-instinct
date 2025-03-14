@@ -15,9 +15,13 @@ const SET_EQUIPED_PROTHSETIC: usize = 0x140A26150;
 
 //----------------------------------------------------------------------------
 //
-//  Structs (or maybe classes) from the original program
+//  Structs from the original program
 //
 //----------------------------------------------------------------------------
+
+pub fn game_data() -> *const GameData {
+    unsafe { *(GAME_DATA as *const *const GameData) }
+}
 
 #[repr(C)]
 pub struct GameData { 
@@ -52,17 +56,14 @@ impl EquipData {
     }
 }
 
+
 //----------------------------------------------------------------------------
 //
-//  Functions from the original program and getters
+//  Functions from the original program
 //
 //----------------------------------------------------------------------------
 
-pub fn game_data() -> *const GameData {
-    unsafe { *(GAME_DATA as *const *const GameData) }
-}
-
-macro_rules! ext {
+macro_rules! forward {
     (fn $name:tt($($arg:tt: $arg_ty:ty),*) $(-> $ret_ty:ty)?, $address:expr) => {
         #[inline(always)]
         #[allow(unused)]
@@ -74,12 +75,12 @@ macro_rules! ext {
 
 // When a player obtains combat arts/prosthetic tools, they become items in the inventory.
 // When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
-ext!(fn get_item_id(inventory: *const c_void, uid: *const u32) -> u32, GET_ITEM_ID);
+forward!(fn get_item_id(inventory: *const c_void, uid: *const u32) -> u32, GET_ITEM_ID);
 
 // equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
-ext!(fn set_slot(equip_slot: usize, equip_data: *const EquipData, ignore_equip_lock: bool), SET_SLOT);
+forward!(fn set_slot(equip_slot: usize, equip_data: *const EquipData, ignore_equip_lock: bool), SET_SLOT);
 
-ext!(fn set_equipped_prosthetic(unknown: *const c_void, zero: usize, prosthetic_index: usize), SET_EQUIPED_PROTHSETIC);
+forward!(fn set_equipped_prosthetic(unknown: *const c_void, zero: usize, prosthetic_index: usize), SET_EQUIPED_PROTHSETIC);
 
 
 //----------------------------------------------------------------------------

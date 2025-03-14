@@ -1,4 +1,4 @@
-use std::{fmt::{Debug, Display}, io, mem, path::Path};
+use std::{io, mem, path::Path};
 use frame::{Fps, FrameCount};
 use input::{InputBuffer, InputsExt};
 use config::Config;
@@ -45,32 +45,6 @@ const PROSTHETIC_SLOT_0: usize = 0;
 const PROSTHETIC_SLOT_1: usize = 2;
 const PROSTHETIC_SLOT_2: usize = 4;
 
-
-//----------------------------------------------------------------------------
-//
-//  Error
-//
-//----------------------------------------------------------------------------
-
-pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Debug)]
-pub enum Error {
-    Nil(&'static str),
-    Unreachable
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Nil(name) => write!(f, "Field `{name}` is null."),
-            Error::Unreachable => write!(f, "Reached unreachable code."),
-        }
-    }
-}
-
-impl std::error::Error for Error { }
-
 //----------------------------------------------------------------------------
 //
 //  Actual content of the mod
@@ -115,9 +89,9 @@ impl Mod {
         Ok(())
     }
 
-    pub fn process_input(&mut self, input_handler: *mut game::InputHandler) -> Result<()> {
+    pub fn process_input(&mut self, input_handler: *mut game::InputHandler) {
         // If you forget what a bitfield is please refer to Wikipedia
-        let action = unsafe { &mut input_handler.try_mut("input_handler")?.action };
+        let action = unsafe { &mut input_handler.as_mut().expect("input_handler is null").action };
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
         let using_tool = *action & USE_PROSTHETIC != 0;
@@ -153,10 +127,10 @@ impl Mod {
         };
 
         if let Some(desired_tool) = desired_tool {
-            let cur_slot = get_active_prosthetic_slot()?;
-            let tool_slot = locate_prosthetic_tool(desired_tool)?;
+            let cur_slot = get_active_prosthetic_slot();
+            let tool_slot = locate_prosthetic_tool(desired_tool);
             if tool_slot != Some(cur_slot) {
-                equip_prosthetic(desired_tool, cur_slot)?;
+                equip_prosthetic(desired_tool, cur_slot);
                 self.prosthetic_cooldown = PROSTHETIC_SUPRESSION_DURATION
             }
         }
@@ -203,10 +177,10 @@ impl Mod {
                 // to cancel that unexpected animation, block/combat art need to take place
                 // thus the moment of switching is delayed to when block/combat art happens
                 if blocked_just_now || performed_art_just_now {
-                    self.set_combat_art(desired_art)?;
+                    self.set_combat_art(desired_art);
                 }
             } else {
-                self.set_combat_art(desired_art)?;
+                self.set_combat_art(desired_art);
             }
         }
 
@@ -255,19 +229,18 @@ impl Mod {
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
         self.using_tool_last_frame = using_tool;
-        Ok(())
     }
 
 
-    fn set_combat_art(&mut self, art: u32) -> Result<()> {
+    fn set_combat_art(&mut self, art: u32) {
         // equipping the same combat art again can unequip the combat art
         if self.cur_art == Some(art) {
-            return Ok(());
+            return;
         }
-        if set_combat_art(art)? {
+        if set_combat_art(art) {
             self.cur_art = Some(art);
             self.attack_cooldown = ATTACK_SUPRESSION_DURATION;
-            return Ok(());
+            return;
         }
 
         let fallback = match art {
@@ -280,8 +253,6 @@ impl Mod {
         };
         if let Some(fallback) = fallback {
             self.set_combat_art(fallback)
-        } else {
-            Ok(())
         }
     }
 }
@@ -405,109 +376,71 @@ impl Gamepad {
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
 /// When putting things into item slots, the latter shall be used.
-fn get_item_id(uid: u32) -> Result<Option<u32>> {
-    let inventory = &inventory_data()?.inventory;
+fn get_item_id(uid: u32) -> Option<u32> {
+    let inventory = &inventory_data().inventory;
     let uid = &uid;
     let item_id = game::get_item_id(inventory, uid);
     if item_id == 0 || item_id > 0xFFFF {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(item_id))
+    Some(item_id)
 }
 
 
-fn set_combat_art(uid: u32) -> Result<bool> {
+fn set_combat_art(uid: u32) -> bool {
     set_slot(uid, COMBAT_ART_SLOT)
 }
 
-fn equip_prosthetic(uid: u32, slot: usize) -> Result<bool> {
+fn equip_prosthetic(uid: u32, slot: usize) -> bool {
     set_slot(uid, slot)
 }
 
-fn set_slot(uid: u32, slot_index: usize) -> Result<bool> {
+fn set_slot(uid: u32, slot_index: usize) -> bool {
     // Validate if the player has already obtained the combat art
     // If so, there should be a corresponding item (with an item ID) representing that art
     // The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
     // Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
-    let Some(item_id) = get_item_id(uid)? else {
-        return Ok(false);
+    let Some(item_id) = get_item_id(uid) else {
+        return false;
     };
     let equip_data = &game::EquipData::new(item_id);
     game::set_slot(slot_index, equip_data, true);
-    return Ok(true);
+    return true;
 }
 
-fn get_active_prosthetic_slot() -> Result<usize> {
-    let active_prosthetic = player_data()?.activte_prosthetic;
+fn get_active_prosthetic_slot() -> usize {
+    let active_prosthetic = player_data().activte_prosthetic;
     let active_slot = match active_prosthetic {
         0 => PROSTHETIC_SLOT_0,
         1 => PROSTHETIC_SLOT_1,
         2 => PROSTHETIC_SLOT_2,
-        _ => return Err(Error::Unreachable)
+        illegal_slot => unreachable!("Illegal active prosthetic slot: {illegal_slot}")
     };
-    Ok(active_slot)
+    active_slot
 }
 
-fn locate_prosthetic_tool(uid: u32) -> Result<Option<usize>> {
-    let slots = player_data()?.equiped_items;
+fn locate_prosthetic_tool(uid: u32) -> Option<usize> {
+    let slots = player_data().equiped_items;
     log::trace!("slots: {slots:?}");
-    let Some(item_id) = get_item_id(uid)? else {
-        return Ok(None)
+    let Some(item_id) = get_item_id(uid) else {
+        return None
     };
     for slot in [PROSTHETIC_SLOT_0, PROSTHETIC_SLOT_1, PROSTHETIC_SLOT_2] {
         if slots[slot as usize] == item_id {
-            return Ok(Some(slot));
+            return Some(slot);
         }
     }
-    Ok(None)
+    None
 }
 
-fn game_data<'a>() -> Result<&'a game::GameData> {
-    unsafe { game::game_data().try_ref("gamedata") }
+fn game_data<'a>() -> &'a game::GameData {
+    unsafe { game::game_data().as_ref().expect("game_data is null.") }
 }
 
-fn player_data<'a>() -> Result<&'a game::PlayerData> {
-    unsafe { game_data()?.player_data.try_ref("playerdata") }
+fn player_data<'a>() -> &'a game::PlayerData {
+    unsafe { game_data().player_data.as_ref().expect("player_data is null.") }
 }
 
-fn inventory_data<'a>() -> Result<&'a game::InventoryData> {
-    unsafe { player_data()?.inventory_data.try_ref("inventory_data") }
-}
-
-
-//----------------------------------------------------------------------------
-//
-//  Map `None` to `Error::Nil` for pointer dereference
-//
-//----------------------------------------------------------------------------
-
-trait TryRef {
-    type Value;
-    unsafe fn try_ref<'a>(self, name: &'static str) -> Result<&'a Self::Value>;
-}
-
-trait TryMut {
-    type Value;
-    unsafe fn try_mut<'a>(self, name: &'static str) -> Result<&'a mut Self::Value>;
-}
-
-impl<T> TryRef for *const T {
-    type Value = T;
-    unsafe fn try_ref<'a>(self, name: &'static str) -> Result<&'a T> {
-        unsafe { self.as_ref().ok_or(Error::Nil(name)) }
-    }
-}
-
-impl<T> TryRef for *mut T {
-    type Value = T;
-    unsafe fn try_ref<'a>(self, name: &'static str) -> Result<&'a T> {
-        unsafe { self.as_ref().ok_or(Error::Nil(name)) }
-    }
-}
-
-impl<T> TryMut for *mut T {
-    type Value = T;
-    unsafe fn try_mut<'a>(self, name: &'static str) -> Result<&'a mut T> {
-        unsafe { self.as_mut().ok_or(Error::Nil(name)) }
-    }
+fn inventory_data<'a>() -> &'a game::InventoryData {
+    unsafe { player_data().inventory_data.as_ref().expect("inventory_data is null") }
 }
