@@ -89,9 +89,9 @@ impl Mod {
         Ok(())
     }
 
-    pub fn process_input(&mut self, input_handler: *mut game::InputHandler) {
+    pub fn process_input(&mut self, input_handler: &mut game::InputHandler) {
         // If you forget what a bitfield is please refer to Wikipedia
-        let action = unsafe { &mut input_handler.as_mut().expect("input_handler is null").action };
+        let action = &mut input_handler.action ;
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
         let using_tool = *action & USE_PROSTHETIC != 0;
@@ -389,11 +389,7 @@ fn get_item_id(uid: u32) -> Option<ItemId> {
     let inventory = &inventory_data().inventory;
     let uid = &uid;
     let item_id = game::get_item_id(inventory, uid);
-    let item_id = ItemId::try_from(item_id).ok()?;
-    if item_id.get() > 0xFFFF {
-        return None;
-    }
-    Some(item_id)
+    ItemId::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
 }
 
 
@@ -430,8 +426,7 @@ fn get_active_prosthetic_slot() -> ProstheticSlot {
 }
 
 fn locate_prosthetic_tool(uid: u32) -> Option<ProstheticSlot> {
-    let slots = player_data().equiped_items;
-    log::trace!("slots: {slots:?}");
+    let slots = &player_data().equiped_items;
     let Some(item_id) = get_item_id(uid) else {
         return None
     };

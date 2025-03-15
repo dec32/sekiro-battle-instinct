@@ -40,7 +40,6 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
 //----------------------------------------------------------------------------
 
 #[unsafe(no_mangle)]
-#[allow(non_snake_case, dead_code)]
 extern "stdcall" fn DirectInput8Create(hinst: HINSTANCE, dwversion: u32, riidltf: *const GUID, ppvout: *mut *mut c_void, punkouter: HINSTANCE) -> HRESULT {
     match load_dll() {
         Ok(address) => {
@@ -141,7 +140,7 @@ fn _modify(path: PathBuf) -> Result<()> {
 }
 
 fn process_input(input_handler: *mut game::InputHandler, arg: usize) -> usize {
-    MOD.lock().unwrap().process_input(input_handler);
+    MOD.lock().unwrap().process_input(unsafe { input_handler.as_mut().expect("input_handler is null") });
     let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
     process_input_orig(input_handler, arg)
 }
