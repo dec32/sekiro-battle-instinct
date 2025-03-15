@@ -26,7 +26,7 @@ Sekiro/
 ├─ dinput8_fps_unlock.dll  # that comes from the FPS Unlock MOD
 ├─ dinput8_mod_engine.dll  # that comes from the MOD Engine
 ├─ sekiro.exe
-├─ ...
+└─ ...
 ```
 
 The MOD will automatically chain load the renamed `.dll` files for you.
