@@ -64,23 +64,34 @@ impl EquipData {
 //----------------------------------------------------------------------------
 
 macro_rules! forward {
-    (fn $name:tt($($arg:tt: $arg_ty:ty),*) $(-> $ret_ty:ty)?, $address:expr) => {
-        #[inline(always)]
-        #[allow(unused)]
-        pub fn $name($($arg: $arg_ty),*) $(-> $ret_ty)? {
-            unsafe { mem::transmute::<_, fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
-        }
+    (
+        $(
+            @[$address:expr]
+            fn $name:tt($($arg:tt: $arg_ty:ty),*) $(-> $ret_ty:ty)?
+        );*
+        $(;)?
+    ) => {
+        $(
+            #[inline(always)]
+            #[allow(unused)]
+            pub fn $name($($arg: $arg_ty),*) $(-> $ret_ty)? {
+                unsafe { mem::transmute::<_, extern fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
+            }
+        )*
     };
 }
 
-// When a player obtains combat arts/prosthetic tools, they become items in the inventory.
-// When equipping combat arts/prosthetic tools, the items' IDs shall be used instead of the orignal IDs.
-forward!(fn get_item_id(inventory: *const c_void, uid: *const u32) -> u32, GET_ITEM_ID);
+forward! {
+    @[GET_ITEM_ID]
+    fn get_item_id(inventory: *const c_void, uid: *const u32) -> u32;
 
-// equip_slot: 1 represents the combat art slot. 0, 2 and 4 represents the prosthetic slots
-forward!(fn set_slot(equip_slot: usize, equip_data: *const EquipData, ignore_equip_lock: bool), SET_SLOT);
+    @[SET_SLOT]
+    fn set_slot(equip_slot: usize, equip_data: *const EquipData, ignore_equip_lock: bool);
+    
+    @[SET_EQUIPED_PROTHSETIC]
+    fn set_equipped_prosthetic(unknown: *const c_void, zero: usize, prosthetic_index: usize);
+}
 
-forward!(fn set_equipped_prosthetic(unknown: *const c_void, zero: usize, prosthetic_index: usize), SET_EQUIPED_PROTHSETIC);
 
 
 //----------------------------------------------------------------------------
