@@ -68,8 +68,7 @@ macro_rules! forward {
         $(
             @[$address:expr]
             fn $name:tt($($arg:tt: $arg_ty:ty),*) $(-> $ret_ty:ty)?
-        );*
-        $(;)?
+        );*;
     ) => {
         $(
             #[inline(always)]
