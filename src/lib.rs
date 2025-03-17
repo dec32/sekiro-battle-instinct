@@ -42,29 +42,26 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
 #[unsafe(no_mangle)]
 extern "stdcall" fn DirectInput8Create(hinst: HINSTANCE, dwversion: u32, riidltf: *const GUID, ppvout: *mut *mut c_void, punkouter: HINSTANCE) -> HRESULT {
     match load_dll() {
-        Ok(address) => {
-            let f = unsafe { mem::transmute::<_, fn(HINSTANCE, u32, *const GUID, *mut *mut c_void, HINSTANCE)->HRESULT>(address) };
-            f(hinst, dwversion, riidltf, ppvout, punkouter)
-        },
+        Ok(proc) => proc(hinst, dwversion, riidltf, ppvout, punkouter),
         Err(e) => e.into()
     }
 }
 
 
-fn load_dll() -> windows::core::Result<usize> {
-    let mut path = vec![0;128];
+fn load_dll() -> windows::core::Result<fn(HINSTANCE, u32, *const GUID, *mut *mut c_void, HINSTANCE) -> HRESULT> {
     unsafe {
+        let mut path = vec![0;128];
         let len = GetSystemDirectoryW(Some(&mut path));
         path.truncate(len as usize);
-        path.extend_from_slice(OsStr::new("\\dinput8.dll\0").encode_wide().collect::<Vec<_>>().as_slice());
+        path.extend(OsStr::new("\\dinput8.dll\0").encode_wide());
         let hmodule = LoadLibraryW(PCWSTR::from_raw(path.as_ptr()))?;
         let Some(address) = GetProcAddress(hmodule, s!("DirectInput8Create")) else {
             return Err(GetLastError().into());
         };
-        let address = mem::transmute::<_, usize>(address);
+        let address = address as usize;
         let path = OsString::from_wide(&path[..path.len() - 1]).into_string().unwrap();
         log::debug!("Located DirectInput8Create at {:#08x}({}).", address, path);
-        Ok(address)
+        Ok(mem::transmute(address))
     }
 }
 
