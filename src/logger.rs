@@ -1,6 +1,6 @@
 use std::{env, fs, os::windows::fs::MetadataExt, path::PathBuf};
 use chrono::Local;
-use log::{error, Level, LevelFilter::*};
+use log::{self, Level, LevelFilter::*};
 use anyhow::Result;
 
 #[cfg(debug_assertions)]
@@ -14,7 +14,7 @@ pub fn setup() -> Result<()> {
     let path = path.join("battle_instinct.log");
     if let Ok(meta) = fs::metadata(&path) {
         if meta.file_size() >= 5 * 1024 * 1024 {
-            let _ = fs::remove_file(&path);
+            fs::remove_file(&path).ok();
         }
     }
     fern::Dispatch::new()
@@ -29,7 +29,7 @@ pub fn setup() -> Result<()> {
         .level(if RELEASE { Warn } else { Trace })
         .chain(fern::log_file(path)?)
         .apply()?;
-    std::panic::set_hook(Box::new(|info|error!("{info}")));
+    std::panic::set_hook(Box::new(|info|log::error!("{info}")));
     Ok(())
 }
 

@@ -3,7 +3,7 @@ mod game;
 mod config;
 mod input;
 mod frame;
-mod logging;
+mod logger;
 
 use core::Mod;
 use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, sync::{Mutex, OnceLock}, thread, time::Duration};
@@ -22,7 +22,7 @@ use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastErro
 #[allow(non_snake_case, dead_code)]
 extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: *mut()) -> bool {
     if call_reason == DLL_PROCESS_ATTACH {
-        logging::setup().ok();
+        logger::setup().ok();
         let mut buf: Vec<u16> = vec![0;128];
         let len = unsafe { GetModuleFileNameW(dll_module, buf.as_mut_slice()) } as usize;
         let dll_path = PathBuf::from(OsString::from_wide(&buf[..len]));
