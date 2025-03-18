@@ -45,9 +45,6 @@ impl<S: AsRef<str>> From<S> for Config {
     fn from(value: S) -> Config {
         let mut config = Config::new_const();
         for line in value.as_ref().lines() {
-            if line.is_empty() || line.starts_with("#"){
-                continue;
-            }
             let mut items = line.split_whitespace()
                 .take_while(|item|!item.starts_with("#"));
             // between IDs and inputs there're names of combat arts. They're ignored here
