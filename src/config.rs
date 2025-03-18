@@ -48,12 +48,13 @@ impl<S: AsRef<str>> From<S> for Config {
             if line.is_empty() || line.starts_with("#"){
                 continue;
             }
-            let mut split = line.split_whitespace();
+            let mut items = line.split_whitespace()
+                .take_while(|item|!item.starts_with("#"));
             // between IDs and inputs there're names of combat arts. They're ignored here
-            let Some(id) = split.next().and_then(|id|id.parse::<u32>().ok()) else {
+            let Some(id) = items.next().and_then(|id|id.parse::<u32>().ok()) else {
                 continue;
             };
-            let Some(inputs) = split.last() else {
+            let Some(inputs) = items.last() else {
                 continue;
             };
 
@@ -158,11 +159,12 @@ fn test_load() {
     }
 
     let raw = "
-        7100  Ichimonji: Double           ∅
-        70000 Loaded Shuriken             ∅
-        5600  Floating Passage           ←→
-        7200  Spiral Clound Passage      →←
-        74000 Mist Raven                 ←→
+        # this is a line of comment
+        7100  Ichimonji: Double           ∅  # comment
+        70000 Loaded Shuriken             ∅  # comment
+        5600  Floating Passage           ←→  # comment
+        7200  Spiral Clound Passage      →←  # comment
+        74000 Mist Raven                 ←→  # comment
         ";
     let config = Config::from(raw);
     let skills = config.skills;
