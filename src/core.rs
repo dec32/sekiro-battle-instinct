@@ -120,7 +120,7 @@ impl Mod {
             if self.buffer.expired() {
                 self.config.get_default_skill().tool
             } else {
-                self.config.get_default_skill().tool
+                self.config.get_skill(&inputs).tool
             }
         } else {
             None
