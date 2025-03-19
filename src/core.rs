@@ -119,39 +119,54 @@ impl Mod {
         };
 
         // prosthetic tools
-        let desired_tool = if used_tool_just_now {
+        let desired_tools = if used_tool_just_now {
             // equip the alternative tools only right before using them
             // so that the prosthetic slot doesn't change on plain character movement
             self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
             if !self.buffer.expired() {
-                self.config.get_tool(&inputs)
+                self.config.get_tools(&inputs)
             } else {
-                None
+                &[]
             }
         } else {
             // equip the default tool as soon as it's availble
             // so that the rollback is reflected on the Prosthetic slot immediately
             if self.rollback_countdown.done() {
-                self.config.get_default_tool()
+                self.config.get_default_tools()
             } else {
                 self.rollback_countdown.count_on(!using_tool);
-                None
+                &[]
             }
         };
 
-        if let Some(desired_tool) = desired_tool {
-            let cur_slot = get_active_prosthetic_slot();
-            let tool_slot = locate_prosthetic_tool(desired_tool);
-            if tool_slot != Some(cur_slot) {
-                equip_prosthetic(desired_tool, cur_slot);
+        // // naive strategy: just use the first tool and overwrite the active slot
+        // if let Some(desired_tool) = desired_tools.iter().next().cloned() {
+        //     let active_slot = get_active_prosthetic_slot();
+        //     let target_slot = locate_prosthetic_tool(desired_tool);
+        //     if target_slot != Some(active_slot) {
+        //         equip_prosthetic(desired_tool, active_slot);
+        //         self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
+        //     }
+        // }
+
+        if let Some(first_tool) = desired_tools.iter().next().cloned() {
+            // when multiple tools are bind to the same inputs, use the already equiped one first
+            // if none equipped, simply use the first one in the list
+            let active_slot = get_active_prosthetic_slot();
+            let target_slot = desired_tools.iter().cloned()
+                .filter_map(|uid|locate_prosthetic_tool(uid))
+                .next();
+            if let Some(target_slot) = target_slot {
+                if target_slot != active_slot {
+                    swap_prosthetic(target_slot, active_slot);
+                    self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
+                }
+            } else {
+                // todo: remember the swapped out tools for later reference
+                equip_prosthetic(first_tool, active_slot);
                 self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
             }
-        }
-        if self.prosthetic_delay != 0 {
-            *action &= !USE_PROSTHETIC;
-            self.prosthetic_delay -= 1;
-        }
-        
+        }       
 
         // combat arts
         let desired_art = if !self.swapout_countdown.done() {
@@ -404,6 +419,24 @@ fn get_item_id(uid: u32) -> Option<ItemId> {
     ItemId::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
 }
 
+/// call this fucntion directly and see bug happen
+fn set_item_into_slot(item_id: u32, slot_index: usize) {
+    let equip_data = &game::EquipData::new(item_id);
+    game::set_slot(slot_index, equip_data, true);
+}
+
+/// Validate if the player has already obtained the combat art
+/// If so, there should be a corresponding item (with an item ID) representing that art
+/// The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
+/// Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
+fn set_slot(uid: u32, slot_index: usize) -> bool {
+    let Some(item_id) = get_item_id(uid) else {
+        return false;
+    };
+    set_item_into_slot(item_id.get(), slot_index);
+    return true;
+}
+
 
 fn set_combat_art(uid: u32) -> bool {
     set_slot(uid, COMBAT_ART_SLOT as usize)
@@ -413,17 +446,13 @@ fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> bool {
     set_slot(uid, slot as usize)
 }
 
-fn set_slot(uid: u32, slot_index: usize) -> bool {
-    // Validate if the player has already obtained the combat art
-    // If so, there should be a corresponding item (with an item ID) representing that art
-    // The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
-    // Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
-    let Some(item_id) = get_item_id(uid) else {
-        return false;
-    };
-    let equip_data = &game::EquipData::new(item_id.get());
-    game::set_slot(slot_index, equip_data, true);
-    return true;
+#[allow(unused)]
+fn swap_prosthetic(slot_a: ProstheticSlot, slot_b: ProstheticSlot) {
+    let slots = &player_data().equiped_items;
+    let item_a = slots[slot_a as usize]; // 256 when no tool is equipped
+    let item_b = slots[slot_b as usize];
+    set_item_into_slot(item_a, slot_b as usize);
+    set_item_into_slot(item_b, slot_a as usize);
 }
 
 fn get_active_prosthetic_slot() -> ProstheticSlot {

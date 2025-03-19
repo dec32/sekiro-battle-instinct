@@ -1,10 +1,10 @@
-use std::{fs, io, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, io, path::Path};
 use log::warn;
-use crate::input::{Input::*, Inputs, InputsTrie};
+use crate::input::{Input::{self, *}, Inputs, InputsTrie};
 
 pub struct Config {
     arts: InputsTrie<u32>,
-    tools: InputsTrie<u32>,
+    tools: InputsTrie<&'static[u32]>,
 }
 
 impl Config {
@@ -20,7 +20,7 @@ impl Config {
         Ok(file.into())
     }
 
-    pub fn get_art(&self, inputs: &Inputs) -> Option<u32> {
+    pub fn get_art(&self, inputs: &[Input]) -> Option<u32> {
         self.arts.get(inputs)
     }
 
@@ -28,18 +28,20 @@ impl Config {
         self.arts.get(&[])
     }
 
-    pub fn get_tool(&self, inputs: &Inputs) -> Option<u32> {
-        self.tools.get(inputs)
+    pub fn get_tools(&self, inputs: &[Input]) -> &'static[u32] {
+        self.tools.get_or_default(inputs)
     }
 
-    pub fn get_default_tool(&self) -> Option<u32> {
-        self.tools.get(&[])
+    pub fn get_default_tools(&self) -> &'static[u32] {
+        self.tools.get_or_default(&[])
     }
 }
 
 impl<S: AsRef<str>> From<S> for Config {
     fn from(value: S) -> Config {
         let mut config = Config::new_const();
+        let mut tools_map = HashMap::<Inputs, Vec<u32>>::new();
+        let mut inputs_set = HashSet::new();
         for line in value.as_ref().lines() {
             let mut items = line.split_whitespace()
                 .take_while(|item|!item.starts_with("#"));
@@ -61,22 +63,29 @@ impl<S: AsRef<str>> From<S> for Config {
                 }
             };
 
-            let mut possible_inputs = parse_possible_inputs(inputs).into_iter();
-            if let Some(inputs) = possible_inputs.next() {
-                // the configured inputs
-                if is_art {
-                    config.arts.insert(inputs.clone(), id);
-                } else {
-                    config.tools.insert(inputs, id);
+            let Some(inputs) = parse_inputs(inputs) else {
+                continue;
+            };
+            inputs_set.insert(inputs.clone());
+
+            if is_art {
+                config.arts.insert(inputs.clone(), id);
+            } else {
+                tools_map.entry(inputs).or_insert_with(Vec::new).push(id);
+            }
+        }
+        for (inputs, tools) in tools_map {
+            config.tools.insert(inputs, tools.leak());
+        }
+
+        // fault tolernce
+        for inputs in inputs_set {
+            for alt_inputs in possible_altenrnatives(&inputs) {
+                if let Some(art) = config.arts.get(&inputs) {
+                    config.arts.try_insert(alt_inputs.clone(), art);
                 }
-                
-                // alternative form, they cannot overwrite the configured ones
-                for alt_inputs in possible_inputs {
-                    if is_art {
-                        config.arts.try_insert(alt_inputs.clone(), id);
-                    } else {
-                        config.tools.try_insert(alt_inputs, id);
-                    }
+                if let Some(tools) = config.tools.get(&inputs) {
+                    config.tools.try_insert(alt_inputs.clone(), tools);
                 }
             }
         }
@@ -85,9 +94,9 @@ impl<S: AsRef<str>> From<S> for Config {
 }
 
 // reuturns the input represented by the string and its alternative form when fault tolerance is available
-fn parse_possible_inputs(inputs: &str) -> Vec<Inputs> {
+fn parse_inputs(inputs: &str) -> Option<Inputs> {
     if matches!(inputs, "∅" | "空" | "none") {
-        vec![Inputs::new()]
+        Some(Inputs::new())
     } else {
         let chars = inputs.chars();
         let char_count = chars.count();
@@ -106,47 +115,61 @@ fn parse_possible_inputs(inputs: &str) -> Vec<Inputs> {
             .collect::<Vec<_>>();
         // the last element of the line may not be the inputs but rather the name of the combat arts
         if inputs.len() != char_count {
-            return vec![]
+            return None
         }
+        Some(inputs.into_iter().take(3).collect::<Inputs>())
+    }
+}
 
-        let inputs = inputs.into_iter().take(3).collect::<Inputs>();
-        if inputs.len() >= 2 {
-            // fault tolerance for keyboards
-            // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
-            let mut possible_inputs = vec![inputs.clone()];
-            let mut rev = Inputs::new();
-            rev.push(inputs[1]);
-            rev.push(inputs[0]);
-            possible_inputs.push(rev);
-            if inputs[0] == inputs[1].opposite() {
-                for fault in [Up, Rt, Dn, Lt] {
-                    if fault == inputs[0] || fault == inputs[1] {
-                        continue;
-                    }
-                    let mut semicircle = Inputs::new();
-                    semicircle.push(inputs[0]);
-                    semicircle.push(fault);
-                    semicircle.push(inputs[1]);
-                    possible_inputs.push(semicircle);
+#[allow(unused)]
+fn possible_altenrnatives(inputs: &[Input]) -> Vec<Inputs> {
+    if inputs.len() >= 2 {
+        // fault tolerance for keyboards
+        // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
+        let mut possible_inputs = Vec::new();
+        let mut rev = Inputs::new();
+        rev.push(inputs[1]);
+        rev.push(inputs[0]);
+        possible_inputs.push(rev);
+        if inputs[0] == inputs[1].opposite() {
+            for fault in [Up, Rt, Dn, Lt] {
+                if fault == inputs[0] || fault == inputs[1] {
+                    continue;
                 }
+                let mut semicircle = Inputs::new();
+                semicircle.push(inputs[0]);
+                semicircle.push(fault);
+                semicircle.push(inputs[1]);
+                possible_inputs.push(semicircle);
             }
-            possible_inputs
-        } else {
-            vec![inputs]
         }
+        possible_inputs
+    } else {
+        Vec::new()
     }
 }
 
 #[test]
 fn test_load() {
 
-    // let raw = "
-    //     # this is a line of comment
-    //     7100  Ichimonji: Double           ∅  # comment
-    //     70000 Loaded Shuriken             ∅  # comment
-    //     5600  Floating Passage           ←→  # comment
-    //     7200  Spiral Clound Passage      →←  # comment
-    //     74000 Mist Raven                 ←→  # comment
-    //     ";
-    // let config = Config::from(raw);
+    let raw = "
+        # this is a line of comment
+        7100  Ichimonji: Double           ∅  # comment
+        70000 Loaded Shuriken             ∅  # comment
+        70100 Spinnging Shuriken          ∅  # comment
+        5600  Floating Passage           ←→  # comment
+        7200  Spiral Clound Passage      →←  # comment
+        74000 Mist Raven                 ←→  # comment
+        ";
+    let config = Config::from(raw);
+
+    assert_eq!(config.get_default_art(), Some(7100));
+    assert_eq!(config.get_default_tools(), &[70000, 70100]);
+
+    assert_eq!(config.get_art(&[Lt, Rt]), Some(5600));
+    assert_eq!(config.get_art(&[Rt, Lt]), Some(7200));
+
+    assert_eq!(config.get_tools(&[Lt, Rt]), &[74000]);
+    assert_eq!(config.get_tools(&[Rt, Lt]), &[74000]);
+
 }

@@ -75,10 +75,23 @@ impl Input {
 pub type Inputs = ArrayVec<Input, INPUTS_CAP>;
 pub trait InputsExt {
     fn meant_for_art(&self) -> bool;
+    fn as_index(&self) -> usize;
 }
-impl InputsExt for Inputs {
+
+impl<I> InputsExt for I 
+where I: AsRef<[Input]>
+{
     fn meant_for_art(&self) -> bool {
-        self.len() >= 2
+        self.as_ref().len() >= 2
+    }
+    
+    fn as_index(&self) -> usize {
+        const BASE: usize = 9;
+        let mut idx = 0;
+        for (i, input) in self.as_ref().iter().cloned().enumerate() {
+            idx += input.digit() * BASE.pow(i as u32);
+        }
+        idx
     }
 }
 
@@ -267,24 +280,21 @@ impl<T:Copy> InputsTrie<T> {
     }
 
     pub fn get(&self, inputs: &[Input]) -> Option<T> {
-        self.array[Self::idx(inputs)]
+        self.array[inputs.as_index()]
     }
 
     pub fn insert(&mut self, inputs: Inputs, value: T) {
-        self.array[Self::idx(&inputs)] = Some(value);
+        self.array[inputs.as_index()] = Some(value);
     }
 
+    #[allow(unused)]
     pub fn try_insert(&mut self, inputs: Inputs, value: T) {
-        self.array[Self::idx(&inputs)].get_or_insert(value);
+        self.array[inputs.as_index()].get_or_insert(value);
     }
+}
 
-    fn idx(inputs: &[Input]) -> usize {
-        // cast the input sequence into a base-9 number
-        const BASE: usize = 9;
-        let mut idx = 0;
-        for (i, input) in inputs.iter().cloned().take(INPUTS_CAP).enumerate() {
-            idx += input.digit() * BASE.pow(i as u32);
-        }
-        idx
+impl<T: Default + Copy> InputsTrie<T> {
+    pub fn get_or_default(&self, inputs: &[Input]) -> T {
+        self.array[inputs.as_index()].unwrap_or_default()
     }
 }
