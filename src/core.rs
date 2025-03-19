@@ -16,6 +16,7 @@ use crate::{config, frame, game::{self}, input};
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
+const PROSTHETIC_ROLLBACK_SUPPRESSION_DURATION: u16 = 120;
 
 // combat art UIDs
 const ASHINA_CROSS: u32 = 5500;
@@ -60,6 +61,7 @@ pub struct Mod {
     attacking_last_frame: bool,
     using_tool_last_frame: bool, 
     equip_cooldown: Cooldown,
+    rollback_cooldown: Cooldown,
     attack_cooldown: u8,
     prosthetic_cooldown: u8,
     injected_blocks: u8,
@@ -77,6 +79,7 @@ impl Mod {
             attacking_last_frame: false,
             using_tool_last_frame: false,
             equip_cooldown: Cooldown::zero(),
+            rollback_cooldown: Cooldown::zero(),
             attack_cooldown: 0,
             prosthetic_cooldown: 0,
             injected_blocks: 0,
@@ -117,13 +120,25 @@ impl Mod {
 
         // prosthetic tools
         let desired_tool = if used_tool_just_now {
-            if self.buffer.expired() {
-                self.config.get_default_skill().tool
-            } else {
+            // equip the alternative tools only right before using them
+            // so that the prosthetic slot doesn't change on plain character movement
+            self.rollback_cooldown = Cooldown::new(PROSTHETIC_ROLLBACK_SUPPRESSION_DURATION);
+            if !self.buffer.expired() {
                 self.config.get_skill(&inputs).tool
+            } else {
+                None
             }
         } else {
-            None
+            // equip the default tool as soon as it's availble
+            // so that the rollback is reflected on the Prosthetic slot immediately
+            if self.rollback_cooldown.done() {
+                self.config.get_default_skill().tool
+            } else {
+                if !using_tool || self.rollback_cooldown.is_running() {
+                    self.rollback_cooldown.decr();
+                }
+                None
+            }
         };
 
         if let Some(desired_tool) = desired_tool {
@@ -131,7 +146,7 @@ impl Mod {
             let tool_slot = locate_prosthetic_tool(desired_tool);
             if tool_slot != Some(cur_slot) {
                 equip_prosthetic(desired_tool, cur_slot);
-                self.prosthetic_cooldown = PROSTHETIC_SUPRESSION_DURATION
+                self.prosthetic_cooldown = PROSTHETIC_SUPRESSION_DURATION;
             }
         }
         if self.prosthetic_cooldown != 0 {
