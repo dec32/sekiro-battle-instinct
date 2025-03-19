@@ -166,7 +166,12 @@ impl Mod {
                 equip_prosthetic(first_tool, active_slot);
                 self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
             }
-        }       
+        }
+
+        if self.prosthetic_delay != 0 {
+            *action &= !USE_PROSTHETIC;
+            self.prosthetic_delay -= 1;
+        }
 
         // combat arts
         let desired_art = if !self.swapout_countdown.done() {
@@ -446,7 +451,6 @@ fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> bool {
     set_slot(uid, slot as usize)
 }
 
-#[allow(unused)]
 fn swap_prosthetic(slot_a: ProstheticSlot, slot_b: ProstheticSlot) {
     let slots = &player_data().equiped_items;
     let item_a = slots[slot_a as usize]; // 256 when no tool is equipped

@@ -61,7 +61,7 @@ impl Input {
         self as usize % 2 == 1
     }
 
-    fn digit(self) -> usize {
+    fn as_digit(self) -> usize {
         self as usize + 1
     }
 
@@ -89,7 +89,7 @@ where I: AsRef<[Input]>
         const BASE: usize = 9;
         let mut idx = 0;
         for (i, input) in self.as_ref().iter().cloned().enumerate() {
-            idx += input.digit() * BASE.pow(i as u32);
+            idx += input.as_digit() * BASE.pow(i as u32);
         }
         idx
     }
@@ -124,10 +124,10 @@ impl InputBuffer {
 
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
-        for (i, down) in [up, right, down, left].iter().cloned().enumerate() {
+        for (i, (down, input)) in [(up, Up), (right, Rt), (down, Dn), (left, Lt)].into_iter().enumerate() {
             if !self.keys_down[i] && down {
                 // newly pressed key
-                self.push(Input::from(i * 2));
+                self.push(input);
                 updated = true;
             }
             self.keys_down[i] = down;
