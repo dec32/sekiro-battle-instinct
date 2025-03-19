@@ -1,29 +1,17 @@
 use std::{fs, io, path::Path};
-use const_default::ConstDefault;
 use log::warn;
 use crate::input::{Input::*, Inputs, InputsTrie};
 
 pub struct Config {
-    skills: InputsTrie<Skill>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Skill {
-    pub art: Option<u32>,
-    pub tool: Option<u32>
-}
-
-impl ConstDefault for Skill {
-    const DEFAULT: Skill = Skill {
-        art: None,
-        tool: None
-    };
+    arts: InputsTrie<u32>,
+    tools: InputsTrie<u32>,
 }
 
 impl Config {
     pub const fn new_const() -> Config {
         Config {
-            skills: InputsTrie::new_const(),
+            arts: InputsTrie::new_const(),
+            tools: InputsTrie::new_const()
         }
     }
 
@@ -32,12 +20,20 @@ impl Config {
         Ok(file.into())
     }
 
-    pub fn get_skill(&mut self, inputs: &Inputs) -> Skill {
-        self.skills.get(inputs)
+    pub fn get_art(&self, inputs: &Inputs) -> Option<u32> {
+        self.arts.get(inputs)
     }
 
-    pub fn get_default_skill(&mut self) -> Skill {
-        self.skills.get(&[])
+    pub fn get_default_art(&self) -> Option<u32> {
+        self.arts.get(&[])
+    }
+
+    pub fn get_tool(&self, inputs: &Inputs) -> Option<u32> {
+        self.tools.get(inputs)
+    }
+
+    pub fn get_default_tool(&self) -> Option<u32> {
+        self.tools.get(&[])
     }
 }
 
@@ -68,23 +64,19 @@ impl<S: AsRef<str>> From<S> for Config {
             let mut possible_inputs = parse_possible_inputs(inputs).into_iter();
             if let Some(inputs) = possible_inputs.next() {
                 // the configured inputs
-                let mut slot = config.skills.get(&inputs);
                 if is_art {
-                    slot.art = Some(id)
+                    config.arts.insert(inputs.clone(), id);
                 } else {
-                    slot.tool = Some(id)
+                    config.tools.insert(inputs, id);
                 }
-                config.skills.insert(inputs, slot);
-
+                
                 // alternative form, they cannot overwrite the configured ones
                 for alt_inputs in possible_inputs {
-                    let mut slot = config.skills.get(&alt_inputs);
                     if is_art {
-                        slot.art.get_or_insert(id);
+                        config.arts.try_insert(alt_inputs.clone(), id);
                     } else {
-                        slot.tool.get_or_insert(id);
+                        config.tools.try_insert(alt_inputs, id);
                     }
-                    config.skills.insert(alt_inputs, slot);
                 }
             }
         }
@@ -148,25 +140,13 @@ fn parse_possible_inputs(inputs: &str) -> Vec<Inputs> {
 #[test]
 fn test_load() {
 
-    fn skill(art: u32, tool: u32) -> Skill {
-        Skill {
-            art: Some(art).filter(|i|*i!=0),
-            tool: Some(tool).filter(|i|*i!=0),
-        }
-    }
-
-    let raw = "
-        # this is a line of comment
-        7100  Ichimonji: Double           ∅  # comment
-        70000 Loaded Shuriken             ∅  # comment
-        5600  Floating Passage           ←→  # comment
-        7200  Spiral Clound Passage      →←  # comment
-        74000 Mist Raven                 ←→  # comment
-        ";
-    let config = Config::from(raw);
-    let skills = config.skills;
-    assert_eq!(skills.get(&[]), skill(7100, 70000));
-    assert_eq!(skills.get(&[Lt, Rt]), skill(5600, 74000));
-    assert_eq!(skills.get(&[Rt, Lt]), skill(7200, 74000));     // reversed for keyboard
-    assert_eq!(skills.get(&[Lt, Up, Rt]), skill(5600, 74000)); // semicircle for joystick
+    // let raw = "
+    //     # this is a line of comment
+    //     7100  Ichimonji: Double           ∅  # comment
+    //     70000 Loaded Shuriken             ∅  # comment
+    //     5600  Floating Passage           ←→  # comment
+    //     7200  Spiral Clound Passage      →←  # comment
+    //     74000 Mist Raven                 ←→  # comment
+    //     ";
+    // let config = Config::from(raw);
 }

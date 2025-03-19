@@ -12,7 +12,6 @@ fern = "0.6"
 chrono = "0.4"
 minhook = "0.6.0"
 arrayvec = "0.7.6"
-const-default = "1.0.0"
 
 
 [dependencies.windows]

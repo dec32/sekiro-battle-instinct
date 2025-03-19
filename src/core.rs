@@ -124,7 +124,7 @@ impl Mod {
             // so that the prosthetic slot doesn't change on plain character movement
             self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
             if !self.buffer.expired() {
-                self.config.get_skill(&inputs).tool
+                self.config.get_tool(&inputs)
             } else {
                 None
             }
@@ -132,7 +132,7 @@ impl Mod {
             // equip the default tool as soon as it's availble
             // so that the rollback is reflected on the Prosthetic slot immediately
             if self.rollback_countdown.done() {
-                self.config.get_default_skill().tool
+                self.config.get_default_tool()
             } else {
                 self.rollback_countdown.count_on(!using_tool);
                 None
@@ -173,10 +173,10 @@ impl Mod {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear();
-            self.config.get_default_skill().art
+            self.config.get_default_art()
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
-            self.config.get_skill(&inputs).art
+            self.config.get_art(&inputs)
         };
 
         // equip the desired combat art or the fallback version

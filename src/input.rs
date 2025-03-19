@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use arrayvec::ArrayVec;
-use const_default::ConstDefault;
 use log::trace;
 use Input::*;
 
@@ -257,22 +256,26 @@ impl InputBuffer {
 
 /// An array-based trie that uses input sequence as keys
 pub struct InputsTrie<T> {
-    array: [T; usize::pow(9, INPUTS_CAP as u32)]
+    array: [Option<T>; usize::pow(9, INPUTS_CAP as u32)]
 }
 
-impl<T:Copy + ConstDefault> InputsTrie<T> {
+impl<T:Copy> InputsTrie<T> {
     pub const fn new_const() -> InputsTrie<T> {
         InputsTrie {
-            array: [T::DEFAULT; usize::pow(9, INPUTS_CAP as u32)]
+            array: [None; usize::pow(9, INPUTS_CAP as u32)]
         }
     }
 
-    pub fn get(&self, inputs: &[Input]) -> T {
+    pub fn get(&self, inputs: &[Input]) -> Option<T> {
         self.array[Self::idx(inputs)]
     }
 
     pub fn insert(&mut self, inputs: Inputs, value: T) {
-        self.array[Self::idx(&inputs)] = value;
+        self.array[Self::idx(&inputs)] = Some(value);
+    }
+
+    pub fn try_insert(&mut self, inputs: Inputs, value: T) {
+        self.array[Self::idx(&inputs)].get_or_insert(value);
     }
 
     fn idx(inputs: &[Input]) -> usize {
