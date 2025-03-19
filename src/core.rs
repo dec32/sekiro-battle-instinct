@@ -16,7 +16,7 @@ use crate::{config, frame, game::{self}, input};
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
-const PROSTHETIC_ROLLBACK_SUPPRESSION_DURATION: u16 = 120;
+const PROSTHETIC_ROLLBACK_COUNTDOWN: u16 = 120;
 
 // combat art UIDs
 const ASHINA_CROSS: u32 = 5500;
@@ -60,10 +60,10 @@ pub struct Mod {
     blocking_last_frame: bool,
     attacking_last_frame: bool,
     using_tool_last_frame: bool, 
-    equip_cooldown: Cooldown,
-    rollback_cooldown: Cooldown,
-    attack_cooldown: u8,
-    prosthetic_cooldown: u8,
+    swapout_countdown: Countdown,
+    rollback_countdown: Countdown,
+    attack_delay: u8,
+    prosthetic_delay: u8,
     injected_blocks: u8,
     gamepad: Gamepad,
 }
@@ -78,10 +78,10 @@ impl Mod {
             blocking_last_frame: false,
             attacking_last_frame: false,
             using_tool_last_frame: false,
-            equip_cooldown: Cooldown::zero(),
-            rollback_cooldown: Cooldown::zero(),
-            attack_cooldown: 0,
-            prosthetic_cooldown: 0,
+            swapout_countdown: Countdown::zero(),
+            rollback_countdown: Countdown::zero(),
+            attack_delay: 0,
+            prosthetic_delay: 0,
             injected_blocks: 0,
             gamepad: Gamepad::new_const(),
         }
@@ -122,7 +122,7 @@ impl Mod {
         let desired_tool = if used_tool_just_now {
             // equip the alternative tools only right before using them
             // so that the prosthetic slot doesn't change on plain character movement
-            self.rollback_cooldown = Cooldown::new(PROSTHETIC_ROLLBACK_SUPPRESSION_DURATION);
+            self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
             if !self.buffer.expired() {
                 self.config.get_skill(&inputs).tool
             } else {
@@ -131,12 +131,10 @@ impl Mod {
         } else {
             // equip the default tool as soon as it's availble
             // so that the rollback is reflected on the Prosthetic slot immediately
-            if self.rollback_cooldown.done() {
+            if self.rollback_countdown.done() {
                 self.config.get_default_skill().tool
             } else {
-                if !using_tool || self.rollback_cooldown.is_running() {
-                    self.rollback_cooldown.decr();
-                }
+                self.rollback_countdown.count_on(!using_tool);
                 None
             }
         };
@@ -146,28 +144,26 @@ impl Mod {
             let tool_slot = locate_prosthetic_tool(desired_tool);
             if tool_slot != Some(cur_slot) {
                 equip_prosthetic(desired_tool, cur_slot);
-                self.prosthetic_cooldown = PROSTHETIC_SUPRESSION_DURATION;
+                self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
             }
         }
-        if self.prosthetic_cooldown != 0 {
+        if self.prosthetic_delay != 0 {
             *action &= !USE_PROSTHETIC;
-            self.prosthetic_cooldown -= 1;
+            self.prosthetic_delay -= 1;
         }
         
 
         // combat arts
-        let desired_art = if !self.equip_cooldown.done() {
+        let desired_art = if !self.swapout_countdown.done() {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
             if self.cur_art == Some(ONE_MIND) {
                 // One Mind has two windows for animation bugs to happen
                 // one after pressing ATTACK (sheathing) and one after releasing ATTACK (drawing)
                 // the current (ugly) solution is to apply the cooldown after pressing ATTACK,
                 // but only start counting it down after ATTACK is released
-                if !attacking || self.equip_cooldown.is_running() {
-                    self.equip_cooldown.decr();
-                }
+                self.swapout_countdown.count_on(!attacking);
             } else {
-                self.equip_cooldown.decr();
+                self.swapout_countdown.count();
             }
             self.cur_art
         } else if attacking && self.cur_art.is_sheathed() {
@@ -229,16 +225,15 @@ impl Mod {
         // if ATTACK|BLOCK happens way too quick after combat art switching
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
-        if self.attack_cooldown > 0 {
+        if self.attack_delay > 0 {
             *action &= !ATTACK;
-            self.attack_cooldown -= 1;
+            self.attack_delay -= 1;
         }
 
         // if combat art switching happens too quick after performing certain combat arts
         // animation of other unrelated combat arts can be triggered
-        if performed_art_just_now && self.equip_cooldown.done() {
-            let cooldown = self.cur_art.equip_cooldown().adjust_to(self.fps.get());
-            self.equip_cooldown = Cooldown::new(cooldown)
+        if performed_art_just_now && self.swapout_countdown.done() {
+            self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown(), self.fps.get())
         }
 
         self.attacking_last_frame = attacking;
@@ -254,7 +249,7 @@ impl Mod {
         }
         if set_combat_art(art) {
             self.cur_art = Some(art);
-            self.attack_cooldown = ATTACK_SUPRESSION_DURATION;
+            self.attack_delay = ATTACK_SUPRESSION_DURATION;
             return;
         }
 
@@ -274,7 +269,7 @@ impl Mod {
 
 trait CombatArt {
     fn is_sheathed(self) -> bool;
-    fn equip_cooldown(self) -> u16;
+    fn swapout_cooldown(self) -> u16;
 }
 
 impl CombatArt for u32 {
@@ -282,7 +277,7 @@ impl CombatArt for u32 {
         matches!(self, ASHINA_CROSS | ONE_MIND)
     }
 
-    fn equip_cooldown(self) -> u16 {
+    fn swapout_cooldown(self) -> u16 {
         match self {
             ASHINA_CROSS => 75,
             ONE_MIND => 240,
@@ -297,32 +292,34 @@ impl CombatArt for Option<u32> {
         self.map(CombatArt::is_sheathed).unwrap_or(false)
     }
 
-    fn equip_cooldown(self) -> u16 {
-        self.map(CombatArt::equip_cooldown).unwrap_or(0)
+    fn swapout_cooldown(self) -> u16 {
+        self.map(CombatArt::swapout_cooldown).unwrap_or(0)
     }
 }
 
-struct Cooldown {
+struct Countdown {
     value: u16,
     running: bool,
 }
 
-impl Cooldown {
-    const fn zero() -> Cooldown {
-        Cooldown::new(0)
+impl Countdown {
+    const fn zero() -> Countdown {
+        Countdown { value: 0, running: false }
     }
 
-    const fn new(value: u16) -> Cooldown {
-        Cooldown { value, running: false }
+    fn new(value: u16, fps: u16) -> Countdown {
+        Countdown { value: value.adjust_to(fps), running: false }
     }
 
-    fn is_running(&self) -> bool {
-        self.running
-    }
-
-    fn decr(&mut self) {
+    fn count(&mut self) {
        self.value -= 1;
        self.running = true;
+    }
+
+    fn count_on(&mut self, cond: bool) {
+        if cond || self.running {
+            self.count();
+        }
     }
 
     fn done(&self) -> bool {
