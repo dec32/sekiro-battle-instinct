@@ -123,7 +123,9 @@ impl Mod {
             // equip the alternative tools only right before using them
             // so that the prosthetic slot doesn't change on plain character movement
             self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
-            if !self.buffer.expired() {
+            if blocking {
+                self.config.get_tools_for_block()
+            } else if !self.buffer.expired() {
                 self.config.get_tools(&inputs)
             } else {
                 &[]

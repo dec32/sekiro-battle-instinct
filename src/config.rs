@@ -5,13 +5,15 @@ use crate::input::{Input::{self, *}, Inputs, InputsTrie};
 pub struct Config {
     arts: InputsTrie<u32>,
     tools: InputsTrie<&'static[u32]>,
+    tools_for_block: &'static[u32],
 }
 
 impl Config {
     pub const fn new() -> Config {
         Config {
-            arts: InputsTrie::new_const(),
-            tools: InputsTrie::new_const()
+            arts: InputsTrie::new(),
+            tools: InputsTrie::new(),
+            tools_for_block: &[],
         }
     }
 
@@ -35,13 +37,18 @@ impl Config {
     pub fn get_default_tools(&self) -> &'static[u32] {
         self.tools.get_or_default(&[])
     }
+
+    pub fn get_tools_for_block(&self) -> &'static[u32] {
+        self.tools_for_block
+    }
 }
 
 impl<S: AsRef<str>> From<S> for Config {
     fn from(value: S) -> Config {
         let mut config = Config::new();
-        let mut tools_map = HashMap::<Inputs, Vec<u32>>::new();
-        let mut inputs_set = HashSet::new();
+        let mut tools = HashMap::<Inputs, Vec<u32>>::new();
+        let mut tools_for_block = Vec::new();
+        let mut used_inputs = HashSet::new();
         for line in value.as_ref().lines() {
             let mut items = line.split_whitespace()
                 .take_while(|item|!item.starts_with("#"));
@@ -52,7 +59,6 @@ impl<S: AsRef<str>> From<S> for Config {
             let Some(inputs) = items.last() else {
                 continue;
             };
-
             // filter out all illegal IDs to prevent possible bugs
             let is_art = match id {
                 5000..=10000 => true,
@@ -62,24 +68,31 @@ impl<S: AsRef<str>> From<S> for Config {
                     continue;
                 }
             };
-
+            // for umbrella
+            if inputs == "block" && !is_art {
+                tools_for_block.push(id);
+                continue;
+            }
             let Some(inputs) = parse_inputs(inputs) else {
                 continue;
             };
-            inputs_set.insert(inputs.clone());
+            used_inputs.insert(inputs.clone());
 
             if is_art {
                 config.arts.insert(inputs.clone(), id);
             } else {
-                tools_map.entry(inputs).or_insert_with(Vec::new).push(id);
+                tools.entry(inputs).or_insert_with(Vec::new).push(id);
             }
         }
-        for (inputs, tools) in tools_map {
+
+        // leak vecs into slices
+        config.tools_for_block = tools_for_block.leak();
+        for (inputs, tools) in tools {
             config.tools.insert(inputs, tools.leak());
         }
 
         // fault tolernce
-        for inputs in inputs_set {
+        for inputs in used_inputs {
             for alt_inputs in possible_altenrnatives(&inputs) {
                 if let Some(art) = config.arts.get(&inputs) {
                     config.arts.try_insert(alt_inputs.clone(), art);

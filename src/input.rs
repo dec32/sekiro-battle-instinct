@@ -273,7 +273,7 @@ pub struct InputsTrie<T> {
 }
 
 impl<T:Copy> InputsTrie<T> {
-    pub const fn new_const() -> InputsTrie<T> {
+    pub const fn new() -> InputsTrie<T> {
         InputsTrie {
             array: [None; usize::pow(9, INPUTS_CAP as u32)]
         }
