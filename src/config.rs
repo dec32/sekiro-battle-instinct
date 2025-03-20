@@ -8,7 +8,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub const fn new_const() -> Config {
+    pub const fn new() -> Config {
         Config {
             arts: InputsTrie::new_const(),
             tools: InputsTrie::new_const()
@@ -39,7 +39,7 @@ impl Config {
 
 impl<S: AsRef<str>> From<S> for Config {
     fn from(value: S) -> Config {
-        let mut config = Config::new_const();
+        let mut config = Config::new();
         let mut tools_map = HashMap::<Inputs, Vec<u32>>::new();
         let mut inputs_set = HashSet::new();
         for line in value.as_ref().lines() {

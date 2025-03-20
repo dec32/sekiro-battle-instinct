@@ -107,7 +107,7 @@ pub struct InputBuffer {
 }
 
 impl InputBuffer {
-    pub const fn new_const() -> InputBuffer {
+    pub const fn new() -> InputBuffer {
         InputBuffer {
             inputs: Inputs::new_const(),
             inputs_archive: Inputs::new_const(),

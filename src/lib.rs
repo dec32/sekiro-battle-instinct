@@ -112,7 +112,7 @@ fn _chainload(path: &Path) -> Result<()> {
 //----------------------------------------------------------------------------
 
 const HOOK_DELAY: Duration = Duration::from_secs(10);
-static MOD: Mutex<Mod> = Mutex::new(Mod::new_const());
+static MOD: Mutex<Mod> = Mutex::new(Mod::new());
 static PROCESS_INPUT_ORIG: OnceLock<fn(*mut game::InputHandler, usize) -> usize> = OnceLock::new();
 
 fn modify(path: &Path) {

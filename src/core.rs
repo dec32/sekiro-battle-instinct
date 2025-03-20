@@ -69,11 +69,11 @@ pub struct Mod {
 }
 
 impl Mod {
-    pub const fn new_const() -> Mod {
+    pub const fn new() -> Mod {
         Mod {
-            fps: Fps::new_const(),
-            config: Config::new_const(),
-            buffer: InputBuffer::new_const(),
+            fps: Fps::new(),
+            config: Config::new(),
+            buffer: InputBuffer::new(),
             cur_art: None,
             blocking_last_frame: false,
             attacking_last_frame: false,
@@ -83,7 +83,7 @@ impl Mod {
             attack_delay: 0,
             prosthetic_delay: 0,
             injected_blocks: 0,
-            gamepad: Gamepad::new_const(),
+            gamepad: Gamepad::new(),
         }
     }
 
@@ -360,7 +360,7 @@ struct Gamepad {
 impl Gamepad {
     const XUSER_MAX_COUNT: u32 = 3;
     const XINPUT_RETRY_INTERVAL: u16 = 300;
-    const fn new_const() -> Gamepad {
+    const fn new() -> Gamepad {
         Gamepad { connected: false, countdown: 0, latest_idx: 0 }
     }
 
@@ -396,7 +396,7 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
-type ItemId = NonZero<u32>;
+type ItemID = NonZero<u32>;
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -409,11 +409,11 @@ enum ProstheticSlot {
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
 /// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
 /// When putting things into item slots, the latter shall be used.
-fn get_item_id(uid: u32) -> Option<ItemId> {
+fn get_item_id(uid: u32) -> Option<ItemID> {
     let inventory = &inventory_data().inventory;
     let uid = &uid;
     let item_id = game::get_item_id(inventory, uid);
-    ItemId::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
+    ItemID::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
 }
 
 /// call this fucntion directly and see bug happen
