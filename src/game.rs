@@ -1,5 +1,4 @@
 use std::ffi::c_void;
-use std::{mem, ptr};
 
 //----------------------------------------------------------------------------
 //
@@ -74,7 +73,7 @@ macro_rules! forward {
             #[inline(always)]
             #[allow(unused)]
             pub fn $name($($arg: $arg_ty),*) $(-> $ret_ty)? {
-                unsafe { mem::transmute::<_, extern fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
+                unsafe { std::mem::transmute::<_, extern fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
             }
         )*
     };
@@ -88,7 +87,7 @@ forward! {
     fn set_slot(equip_slot: usize, equip_data: *const EquipData, ignore_equip_lock: bool);
     
     @[SET_EQUIPED_PROTHSETIC]
-    fn set_equipped_prosthetic(unknown: *const c_void, zero: usize, prosthetic_index: usize);
+    fn set_equipped_prosthetic(unknown: *const c_void, zero: u32, prosthetic_index: u32);
 }
 
 
@@ -100,26 +99,21 @@ forward! {
 //----------------------------------------------------------------------------
 
 #[allow(unused)]
-unsafe fn resolve_pointers<R, const N: usize>(root: usize, offsets: [usize;N]) -> *const R {
+#[inline(always)]
+pub unsafe fn resolve_pointer_chain<R, const N: usize>(root: usize, offsets: [usize;N]) -> *mut R {
     unsafe {
-        let mut p = *(root as *const *const ());
+        let mut p = root as *mut ();
         for offset in offsets {
-            log::trace!("resloving pointer {p:?}");
-            if p == ptr::null() {
-                return ptr::null()
+            p = *(p as *mut *mut ());
+            if p.is_null() {
+                log::warn!("Runs into null pointers when resolving pointer chain.");
+                return p as *mut R;
             }
-            p = *((p as usize + offset) as *const *const ());
+            p = p.byte_add(offset);
         }
-        p as *const R
+        p as *mut R
     }
 }
-
-
-// problematic garbage
-// fn switch_prothsetic_tool(slot: ProstheticSlot) {
-//     let unknown = unsafe { resolve_pointers(0x143D7A1E0, [0x88, 0x1F10, 0x10, 0xF8, 0x10, 0x18, 0x00, 0x10]) };
-//     game::set_equipped_prosthetic(unknown, 0, slot as usize / 2);
-// }
 
 
 // #[repr(C)]

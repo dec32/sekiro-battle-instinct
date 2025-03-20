@@ -139,16 +139,6 @@ impl Mod {
             }
         };
 
-        // // naive strategy: just use the first tool and overwrite the active slot
-        // if let Some(desired_tool) = desired_tools.iter().next().cloned() {
-        //     let active_slot = get_active_prosthetic_slot();
-        //     let target_slot = locate_prosthetic_tool(desired_tool);
-        //     if target_slot != Some(active_slot) {
-        //         equip_prosthetic(desired_tool, active_slot);
-        //         self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
-        //     }
-        // }
-
         if let Some(first_tool) = desired_tools.iter().next().cloned() {
             // when multiple tools are bind to the same inputs, use the already equiped one first
             // if none equipped, simply use the first one in the list
@@ -158,7 +148,7 @@ impl Mod {
                 .next();
             if let Some(target_slot) = target_slot {
                 if target_slot != active_slot {
-                    swap_prosthetic(target_slot, active_slot);
+                    avtivate_prosthetic_slot(target_slot);
                     self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
                 }
             } else {
@@ -451,13 +441,6 @@ fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> bool {
     set_slot(uid, slot as usize)
 }
 
-fn swap_prosthetic(slot_a: ProstheticSlot, slot_b: ProstheticSlot) {
-    let slots = &player_data().equiped_items;
-    let item_a = slots[slot_a as usize]; // 256 when no tool is equipped
-    let item_b = slots[slot_b as usize];
-    set_item_into_slot(item_a, slot_b as usize);
-    set_item_into_slot(item_b, slot_a as usize);
-}
 
 fn get_active_prosthetic_slot() -> ProstheticSlot {
     let active_prosthetic = player_data().activte_prosthetic;
@@ -481,6 +464,15 @@ fn locate_prosthetic_tool(uid: u32) -> Option<ProstheticSlot> {
         }
     }
     None
+}
+
+fn avtivate_prosthetic_slot(slot: ProstheticSlot) {
+    use std::ffi::c_void;
+    let unknown = unsafe {
+        let character_base: *const c_void = game::resolve_pointer_chain(0x143D7A1E0, [0x88, 0x1F10, 0x10, 0xF8, 0x10, 0x18, 0x00]);
+        *(character_base.byte_add(0x10) as *const *const c_void)
+    };
+    game::set_equipped_prosthetic(unknown, 0, slot as u32 / 2);
 }
 
 fn game_data<'a>() -> &'a game::GameData {
