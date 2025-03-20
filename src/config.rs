@@ -68,8 +68,8 @@ impl<S: AsRef<str>> From<S> for Config {
                     continue;
                 }
             };
-            // for umbrella
-            if inputs == "block" && !is_art {
+            // tools to use when BLOCK is heled, usually umbrella
+            if matches!(inputs, "⛨" | "block" | "防") && !is_art {
                 tools_for_block.push(id);
                 continue;
             }

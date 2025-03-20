@@ -65,6 +65,7 @@ pub struct Mod {
     attack_delay: u8,
     prosthetic_delay: u8,
     injected_blocks: u8,
+    ejected_tool: Option<ItemID>,
     gamepad: Gamepad,
 }
 
@@ -83,6 +84,7 @@ impl Mod {
             attack_delay: 0,
             prosthetic_delay: 0,
             injected_blocks: 0,
+            ejected_tool: None,
             gamepad: Gamepad::new(),
         }
     }
@@ -134,6 +136,9 @@ impl Mod {
             // equip the default tool as soon as it's availble
             // so that the rollback is reflected on the Prosthetic slot immediately
             if self.rollback_countdown.done() {
+                if let Some(ejected_tool) = self.ejected_tool.take() {
+                    set_slot_by_item_id(ejected_tool.get(), 0);
+                }
                 self.config.get_default_tools()
             } else {
                 self.rollback_countdown.count_on(!using_tool);
@@ -141,17 +146,18 @@ impl Mod {
             }
         };
 
-        if let Some(first_tool) = desired_tools.iter().next().cloned() {
+        if let Some(first_tool) = desired_tools.iter().cloned().next() {
             // when multiple tools are bind to the same inputs, use the already equiped one first
             let active_slot = get_active_prosthetic_slot();
             let target_slot = desired_tools.iter().cloned()
-                .filter_map(|uid|locate_prosthetic_tool(uid))
+                .filter_map(locate_prosthetic_tool)
                 .next();
             // if none equipped, simply use the first one in the list
             let target_slot = match target_slot {
                 Some(tagret_slot) => tagret_slot,
                 None => {
                     // todo: remember the swapped out tools for later reference
+                    self.ejected_tool = self.ejected_tool.or(get_prosthetic_tool(ProstheticSlot::S0));
                     equip_prosthetic(first_tool, ProstheticSlot::S0);
                     ProstheticSlot::S0
                 }
@@ -408,35 +414,6 @@ enum ProstheticSlot {
     S2 = PROSTHETIC_SLOT_2,
 }
 
-/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
-/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
-/// When putting things into item slots, the latter shall be used.
-fn get_item_id(uid: u32) -> Option<ItemID> {
-    let inventory = &inventory_data().inventory;
-    let uid = &uid;
-    let item_id = game::get_item_id(inventory, uid);
-    ItemID::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
-}
-
-/// call this fucntion directly and see bug happen
-fn set_item_into_slot(item_id: u32, slot_index: usize) {
-    let equip_data = &game::EquipData::new(item_id);
-    game::set_slot(slot_index, equip_data, true);
-}
-
-/// Validate if the player has already obtained the combat art
-/// If so, there should be a corresponding item (with an item ID) representing that art
-/// The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
-/// Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
-fn set_slot(uid: u32, slot_index: usize) -> bool {
-    let Some(item_id) = get_item_id(uid) else {
-        return false;
-    };
-    set_item_into_slot(item_id.get(), slot_index);
-    return true;
-}
-
-
 fn set_combat_art(uid: u32) -> bool {
     set_slot(uid, COMBAT_ART_SLOT as usize)
 }
@@ -445,6 +422,15 @@ fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> bool {
     set_slot(uid, slot as usize)
 }
 
+fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
+    let slots = &player_data().equiped_items;
+    let item_id = slots[slot as usize];
+    if item_id != 256 {
+        ItemID::new(item_id)
+    } else {
+        None
+    }
+}
 
 fn get_active_prosthetic_slot() -> ProstheticSlot {
     let active_prosthetic = player_data().activte_prosthetic;
@@ -478,6 +464,35 @@ fn activate_prosthetic_slot(slot: ProstheticSlot) {
     };
     game::set_equipped_prosthetic(unknown, 0, slot as u32 / 2);
 }
+
+/// Validate if the player has already obtained the combat art
+/// If so, there should be a corresponding item (with an item ID) representing that art
+/// The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
+/// Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
+fn set_slot(uid: u32, slot_index: usize) -> bool {
+    let Some(item_id) = get_item_id(uid) else {
+        return false;
+    };
+    set_slot_by_item_id(item_id.get(), slot_index);
+    return true;
+}
+
+/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
+/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
+/// When putting things into item slots, the latter shall be used.
+fn get_item_id(uid: u32) -> Option<ItemID> {
+    let inventory = &inventory_data().inventory;
+    let uid = &uid;
+    let item_id = game::get_item_id(inventory, uid);
+    ItemID::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
+}
+
+/// call this function directly and see the game crash
+fn set_slot_by_item_id(item_id: u32, slot_index: usize) {
+    let equip_data = &game::EquipData::new(item_id);
+    game::set_slot(slot_index, equip_data, true);
+}
+
 
 fn game_data<'a>() -> &'a game::GameData {
     unsafe { game::game_data().as_ref().expect("game_data is null.") }
