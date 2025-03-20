@@ -6,12 +6,15 @@ use std::ffi::c_void;
 //
 //----------------------------------------------------------------------------
 
+// fucntions
 pub const PROCESS_INPUT: usize = 0x140B2C190;
-pub const GAME_DATA: usize = 0x143D5AAC0;
-pub const WORLD_DATA: usize = 0x143D7A1E0;
 pub const GET_ITEM_ID: usize = 0x140C3D680;
 pub const SET_SLOT: usize = 0x140D592F0;
 pub const SET_EQUIPED_PROTHSETIC: usize = 0x140A26150;
+
+// objects
+pub const GAME_DATA: usize = 0x143D5AAC0;
+pub const WORLD_DATA: usize = 0x143D7A1E0;
 
 //----------------------------------------------------------------------------
 //
