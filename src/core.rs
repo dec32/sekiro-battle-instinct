@@ -19,19 +19,19 @@ const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_ROLLBACK_COUNTDOWN: u16 = 120;
 
 // combat art UIDs
-const ASHINA_CROSS: u32 = 5500;
-const ONE_MIND: u32 = 6100;
-const SAKURA_DANCE: u32 = 7700;
-const ICHIMONJI: u32 = 5300;
-const ICHIMONJI_DOUBLE: u32 = 7100;
-const PRAYING_STRIKES: u32 = 5900;
-const PRAYING_STRIKES_EXORCISM: u32 = 7500;
-const SENPO_LEAPING_KICKS: u32 = 5800;
-const HIGH_MONK: u32 = 7400;
-const SHADOWRUSH: u32 = 6000;
-const SHADOWFALL: u32 = 7600;
-const MORTAL_DRAW: u32 = 5700;
-const EMPOWERED_MORTAL_DRAW: u32 = 7300;
+const ASHINA_CROSS: UID = 5500;
+const ONE_MIND: UID = 6100;
+const SAKURA_DANCE: UID = 7700;
+const ICHIMONJI: UID = 5300;
+const ICHIMONJI_DOUBLE: UID = 7100;
+const PRAYING_STRIKES: UID = 5900;
+const PRAYING_STRIKES_EXORCISM: UID = 7500;
+const SENPO_LEAPING_KICKS: UID = 5800;
+const HIGH_MONK: UID = 7400;
+const SHADOWRUSH: UID = 6000;
+const SHADOWFALL: UID = 7600;
+const MORTAL_DRAW: UID = 5700;
+const EMPOWERED_MORTAL_DRAW: UID = 7300;
 
 // action bitfields
 const ATTACK: u64 = 0x1;
@@ -56,7 +56,7 @@ pub struct Mod {
     fps: Fps,
     config: Config,
     buffer: InputBuffer,
-    cur_art: Option<u32>,
+    cur_art: Option<UID>,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
     using_tool_last_frame: bool, 
@@ -137,7 +137,7 @@ impl Mod {
             // so that the rollback is reflected on the Prosthetic slot immediately
             if self.rollback_countdown.done() {
                 if let Some(ejected_tool) = self.ejected_tool.take() {
-                    set_slot_by_item_id(ejected_tool.get(), 0);
+                    equip_prosthetic(ejected_tool, ProstheticSlot::S0);
                 }
                 self.config.get_default_tools()
             } else {
@@ -404,7 +404,38 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
-type ItemID = NonZero<u32>;
+pub type UID = u32;
+
+/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
+/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
+/// When putting things into item slots, the latter shall be used.
+/// The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
+/// Putting random items into the item slots can cause severe bugs like losing Kusabimaru permantly
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct ItemID(NonZero<u32>);
+impl ItemID {
+    #[inline(always)]
+    pub fn new(value: u32) -> Option<ItemID> {
+        NonZero::<u32>::new(value).map(|inner|ItemID(inner))
+    }
+
+    #[inline(always)]
+    pub fn get(self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl TryFrom<UID> for ItemID {
+    type Error = ();
+    #[inline(always)]
+    fn try_from(uid: UID) -> Result<Self, Self::Error> {
+        let inventory = &inventory_data().inventory;
+        let uid = &uid;
+        let item_id = game::get_item_id(inventory, uid);
+        ItemID::new(item_id).filter(|it|it.get() < 0xFFFF).ok_or(())
+    }
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -414,12 +445,21 @@ enum ProstheticSlot {
     S2 = PROSTHETIC_SLOT_2,
 }
 
-fn set_combat_art(uid: u32) -> bool {
-    set_slot(uid, COMBAT_ART_SLOT as usize)
+fn set_combat_art(art: impl TryInto<ItemID>) -> bool {
+    set_slot(art, COMBAT_ART_SLOT as usize)
 }
 
-fn equip_prosthetic(uid: u32, slot: ProstheticSlot) -> bool {
-    set_slot(uid, slot as usize)
+fn equip_prosthetic(tool: impl TryInto<ItemID>, slot: ProstheticSlot) -> bool {
+    set_slot(tool, slot as usize)
+}
+
+fn set_slot(skill: impl TryInto<ItemID>, slot_index: usize) -> bool {
+    let Some(item_id) = skill.try_into().ok() else {
+        return false;
+    };
+    let equip_data = &game::EquipData::new(item_id.get());
+    game::set_slot(slot_index, equip_data, true);
+    true
 }
 
 fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
@@ -443,9 +483,9 @@ fn get_active_prosthetic_slot() -> ProstheticSlot {
     active_slot
 }
 
-fn locate_prosthetic_tool(uid: u32) -> Option<ProstheticSlot> {
+fn locate_prosthetic_tool(tool: impl TryInto<ItemID>) -> Option<ProstheticSlot> {
     let slots = &player_data().equiped_items;
-    let Some(item_id) = get_item_id(uid) else {
+    let Some(item_id) = tool.try_into().ok() else {
         return None
     };
     for slot in [ProstheticSlot::S0, ProstheticSlot::S1, ProstheticSlot::S2] {
@@ -464,35 +504,6 @@ fn activate_prosthetic_slot(slot: ProstheticSlot) {
     };
     game::set_equipped_prosthetic(unknown, 0, slot as u32 / 2);
 }
-
-/// Validate if the player has already obtained the combat art
-/// If so, there should be a corresponding item (with an item ID) representing that art
-/// The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
-/// Putting random items into the combat art slot can cause severe bugs like losing Kusabimaru permantly
-fn set_slot(uid: u32, slot_index: usize) -> bool {
-    let Some(item_id) = get_item_id(uid) else {
-        return false;
-    };
-    set_slot_by_item_id(item_id.get(), slot_index);
-    return true;
-}
-
-/// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
-/// Thus a skill has 2 IDs: its original UID and its ID as an item in the inventory.
-/// When putting things into item slots, the latter shall be used.
-fn get_item_id(uid: u32) -> Option<ItemID> {
-    let inventory = &inventory_data().inventory;
-    let uid = &uid;
-    let item_id = game::get_item_id(inventory, uid);
-    ItemID::try_from(item_id).ok().filter(|it|it.get() < 0xFFFF)
-}
-
-/// call this function directly and see the game crash
-fn set_slot_by_item_id(item_id: u32, slot_index: usize) {
-    let equip_data = &game::EquipData::new(item_id);
-    game::set_slot(slot_index, equip_data, true);
-}
-
 
 fn game_data<'a>() -> &'a game::GameData {
     unsafe { game::game_data().as_ref().expect("game_data is null.") }
