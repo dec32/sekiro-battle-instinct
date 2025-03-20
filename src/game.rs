@@ -7,10 +7,11 @@ use std::ffi::c_void;
 //----------------------------------------------------------------------------
 
 pub const PROCESS_INPUT: usize = 0x140B2C190;
-const GAME_DATA: usize = 0x143D5AAC0;
-const GET_ITEM_ID: usize = 0x140C3D680;
-const SET_SLOT: usize = 0x140D592F0;
-const SET_EQUIPED_PROTHSETIC: usize = 0x140A26150;
+pub const GAME_DATA: usize = 0x143D5AAC0;
+pub const WORLD_DATA: usize = 0x143D7A1E0;
+pub const GET_ITEM_ID: usize = 0x140C3D680;
+pub const SET_SLOT: usize = 0x140D592F0;
+pub const SET_EQUIPED_PROTHSETIC: usize = 0x140A26150;
 
 //----------------------------------------------------------------------------
 //
@@ -114,13 +115,3 @@ pub unsafe fn resolve_pointer_chain<R, const N: usize>(root: usize, offsets: [us
         p as *mut R
     }
 }
-
-
-// #[repr(C)]
-// pub struct Gamepad0 {
-//     _0: [u8; 0x24C],
-//     axis0: f32, _1: u32,
-//     axis1: f32, _2: u32,
-//     axis2: f32, _3: u32,
-//     axis3: f32, _4: u32
-// }
