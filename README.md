@@ -15,22 +15,20 @@ To install it, unzip the archive into the game directory (usually `C:\Program Fi
 1. `dinput8.dll`
 2. `battle_instinct.cfg`
 
-## Solve `dinput8.dll` Conflict
-
-If you have MOD Engine or any other MOD that utilizes `dinput8.dll` installed, rename the **other** `dinput8.dll` files to `dinput8_{whatever_you_like}.dll`. For example you may have:
-
-```
-Sekiro/
-├─ dinput8.dll             # that comes from the Battle Instinct MOD
-├─ dinput8_debug.dll       # that comes form the Debug Menu MOD
-├─ dinput8_fps_unlock.dll  # that comes from the FPS Unlock MOD
-├─ dinput8_mod_engine.dll  # that comes from the MOD Engine
-├─ sekiro.exe
-└─ ...
-```
-
-The MOD will automatically chain load the renamed `.dll` files for you.
-
+> [!TIP]
+> If you have MOD Engine or any other MOD that utilizes `dinput8.dll` installed, rename the **other** `dinput8.dll` files to `dinput8_{whatever_you_like}.dll`. For example you may have:
+> ```
+> Sekiro/
+> ├─ dinput8.dll             # that comes from the Battle Instinct MOD
+> ├─ dinput8_debug.dll       # that comes form the Debug Menu MOD
+> ├─ dinput8_fps_unlock.dll  # that comes from the FPS Unlock MOD
+> ├─ dinput8_mod_engine.dll  # that comes from the MOD Engine
+> ├─ sekiro.exe
+> └─ ...
+> ```
+>
+> The MOD will automatically chain load the renamed `.dll` files for you.
+> 
 
 ## Use
 
@@ -78,9 +76,6 @@ The file is a plain text table formatted with whitespace characters. The first c
 Notice that you can bind **multiple prosthetic tools** to the **same input sequence**. The MOD always prefers the already equipped prosthetic tools and tries to switch to them first. If none equiped, the MOD will choose the first one that is configured in the file.
 
 The columns in between store the names of the skills. They're only there for reference. Feel free to modify or delete them.
-
-> [!NOTE]
-> Binding two **adjecent** directions (such as `↓→`) to a skill is not recommended because this kind of inputs can be used for diagonal movements.
 
 ## Credits
 
