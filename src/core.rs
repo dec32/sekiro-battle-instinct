@@ -65,6 +65,7 @@ pub struct Mod {
     attack_delay: u8,
     prosthetic_delay: u8,
     injected_blocks: u8,
+    disable_block: bool,
     ejected_tool: Option<ItemID>,
     gamepad: Gamepad,
 }
@@ -85,6 +86,7 @@ impl Mod {
             prosthetic_delay: 0,
             injected_blocks: 0,
             ejected_tool: None,
+            disable_block: false,
             gamepad: Gamepad::new(),
         }
     }
@@ -136,8 +138,11 @@ impl Mod {
             // equip the default tool as soon as it's availble
             // so that the rollback is reflected on the Prosthetic slot immediately
             if self.rollback_countdown.done() {
+                // also put the ejected tool back to slot 0
                 if let Some(ejected_tool) = self.ejected_tool.take() {
-                    equip_prosthetic(ejected_tool, ProstheticSlot::S0);
+                    if get_prosthetic_tool(ProstheticSlot::S0) != Some(ejected_tool) {
+                        equip_prosthetic(ejected_tool, ProstheticSlot::S0);
+                    }
                 }
                 self.config.tools.get_or_default(&[])
             } else {
@@ -156,7 +161,7 @@ impl Mod {
             let target_slot = match target_slot {
                 Some(tagret_slot) => tagret_slot,
                 None => {
-                    // todo: remember the swapped out tools for later reference
+                    // eject the tool at the slot 0 and revert it later
                     self.ejected_tool = self.ejected_tool.or(get_prosthetic_tool(ProstheticSlot::S0));
                     equip_prosthetic(first_tool, ProstheticSlot::S0);
                     ProstheticSlot::S0
@@ -248,6 +253,18 @@ impl Mod {
         if self.attack_delay > 0 {
             *action &= !ATTACK;
             self.attack_delay -= 1;
+        }
+
+        // when binding umbrella to block+prosthetic, releasing slash gets a bit harder to perform 
+        // because you need to release block first to prevent combat art from happening
+        if used_tool_just_now {
+            self.disable_block = true;
+        }
+        if blocked_just_now {
+            self.disable_block = false;
+        }
+        if self.disable_block {
+            *action &= !BLOCK;
         }
 
         // if combat art switching happens too quick after performing certain combat arts
@@ -413,7 +430,7 @@ pub type UID = u32;
 /// The mapping from UIDs to item IDs is not cached since it will change when player loads other save files.
 /// Putting random items into the item slots can cause severe bugs like losing Kusabimaru permantly
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ItemID(NonZero<u32>);
 impl ItemID {
     #[inline(always)]
