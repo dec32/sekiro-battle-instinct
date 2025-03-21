@@ -1,11 +1,11 @@
 use std::{collections::{HashMap, HashSet}, fs, io, path::Path};
 use log::warn;
-use crate::input::{Input::{self, *}, Inputs, InputsTrie};
+use crate::{core::UID, input::{Input::{self, *}, Inputs, InputsTrie}};
 
 pub struct Config {
-    arts: InputsTrie<u32>,
-    tools: InputsTrie<&'static[u32]>,
-    tools_for_block: &'static[u32],
+    pub arts: InputsTrie<UID>,
+    pub tools: InputsTrie<&'static[UID]>,
+    pub tools_for_block: &'static[UID],
 }
 
 impl Config {
@@ -21,39 +21,19 @@ impl Config {
         let file = fs::read_to_string(path)?.to_ascii_lowercase();
         Ok(file.into())
     }
-
-    pub fn get_art(&self, inputs: &[Input]) -> Option<u32> {
-        self.arts.get(inputs)
-    }
-
-    pub fn get_default_art(&self) -> Option<u32> {
-        self.arts.get(&[])
-    }
-
-    pub fn get_tools(&self, inputs: &[Input]) -> &'static[u32] {
-        self.tools.get_or_default(inputs)
-    }
-
-    pub fn get_default_tools(&self) -> &'static[u32] {
-        self.tools.get_or_default(&[])
-    }
-
-    pub fn get_tools_for_block(&self) -> &'static[u32] {
-        self.tools_for_block
-    }
 }
 
 impl<S: AsRef<str>> From<S> for Config {
     fn from(value: S) -> Config {
         let mut config = Config::new();
-        let mut tools = HashMap::<Inputs, Vec<u32>>::new();
+        let mut tools = HashMap::<Inputs, Vec<UID>>::new();
         let mut tools_for_block = Vec::new();
         let mut used_inputs = HashSet::new();
         for line in value.as_ref().lines() {
             let mut items = line.split_whitespace()
                 .take_while(|item|!item.starts_with("#"));
             // between IDs and inputs there're names of combat arts. They're ignored here
-            let Some(id) = items.next().and_then(|id|id.parse::<u32>().ok()) else {
+            let Some(id) = items.next().and_then(|id|id.parse::<UID>().ok()) else {
                 continue;
             };
             let Some(inputs) = items.last() else {
@@ -176,13 +156,13 @@ fn test_load() {
         ";
     let config = Config::from(raw);
 
-    assert_eq!(config.get_default_art(), Some(7100));
-    assert_eq!(config.get_default_tools(), &[70000, 70100]);
+    assert_eq!(config.arts.get(&[]), Some(7100));
+    assert_eq!(config.tools.get_or_default(&[]), &[70000, 70100]);
 
-    assert_eq!(config.get_art(&[Lt, Rt]), Some(5600));
-    assert_eq!(config.get_art(&[Rt, Lt]), Some(7200));
+    assert_eq!(config.arts.get(&[Lt, Rt]), Some(5600));
+    assert_eq!(config.arts.get(&[Rt, Lt]), Some(7200));
 
-    assert_eq!(config.get_tools(&[Lt, Rt]), &[74000]);
-    assert_eq!(config.get_tools(&[Rt, Lt]), &[74000]);
+    assert_eq!(config.tools.get_or_default(&[Lt, Rt]), &[74000]);
+    assert_eq!(config.tools.get_or_default(&[Rt, Lt]), &[74000]);
 
 }

@@ -61,10 +61,6 @@ impl Input {
         self as usize % 2 == 1
     }
 
-    fn as_digit(self) -> usize {
-        self as usize + 1
-    }
-
     fn rotate(self) -> Input {
         Input::from((self as usize + 1) % 8)
     }
@@ -74,24 +70,27 @@ impl Input {
 /// A stack-allocated container for input sequences
 pub type Inputs = ArrayVec<Input, INPUTS_CAP>;
 pub trait InputsExt {
-    fn meant_for_art(&self) -> bool;
+    const BASE: usize;
+    const MAX_INDEX: usize = usize::pow(9, INPUTS_CAP as u32);
     fn as_index(&self) -> usize;
+    fn meant_for_art(&self) -> bool;
 }
 
 impl<I> InputsExt for I 
 where I: AsRef<[Input]>
 {
-    fn meant_for_art(&self) -> bool {
-        self.as_ref().len() >= 2
-    }
+    const BASE: usize = 9;
     
     fn as_index(&self) -> usize {
-        const BASE: usize = 9;
         let mut idx = 0;
         for (i, input) in self.as_ref().iter().cloned().enumerate() {
-            idx += input.as_digit() * BASE.pow(i as u32);
+            idx += (input as usize + 1) * Self::BASE.pow(i as u32);
         }
         idx
+    }
+
+    fn meant_for_art(&self) -> bool {
+        self.as_ref().len() >= 2
     }
 }
 
@@ -269,13 +268,13 @@ impl InputBuffer {
 
 /// An array-based trie that uses input sequence as keys
 pub struct InputsTrie<T> {
-    array: [Option<T>; usize::pow(9, INPUTS_CAP as u32)]
+    array: [Option<T>; Inputs::MAX_INDEX]
 }
 
 impl<T:Copy> InputsTrie<T> {
     pub const fn new() -> InputsTrie<T> {
         InputsTrie {
-            array: [None; usize::pow(9, INPUTS_CAP as u32)]
+            array: [None; Inputs::MAX_INDEX]
         }
     }
 
@@ -287,7 +286,6 @@ impl<T:Copy> InputsTrie<T> {
         self.array[inputs.as_index()] = Some(value);
     }
 
-    #[allow(unused)]
     pub fn try_insert(&mut self, inputs: Inputs, value: T) {
         self.array[inputs.as_index()].get_or_insert(value);
     }

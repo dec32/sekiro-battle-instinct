@@ -126,9 +126,9 @@ impl Mod {
             // so that the prosthetic slot doesn't change on plain character movement
             self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
             if blocking {
-                self.config.get_tools_for_block()
+                self.config.tools_for_block
             } else if !self.buffer.expired() {
-                self.config.get_tools(&inputs)
+                self.config.tools.get_or_default(&inputs)
             } else {
                 &[]
             }
@@ -139,7 +139,7 @@ impl Mod {
                 if let Some(ejected_tool) = self.ejected_tool.take() {
                     equip_prosthetic(ejected_tool, ProstheticSlot::S0);
                 }
-                self.config.get_default_tools()
+                self.config.tools.get_or_default(&[])
             } else {
                 self.rollback_countdown.count_on(!using_tool);
                 &[]
@@ -193,10 +193,10 @@ impl Mod {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear();
-            self.config.get_default_art()
+            self.config.arts.get(&[])
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
-            self.config.get_art(&inputs)
+            self.config.arts.get(&inputs)
         };
 
         // equip the desired combat art or the fallback version
@@ -404,6 +404,7 @@ impl Gamepad {
 //
 //----------------------------------------------------------------------------
 
+/// UIDs are consistent through different save files.
 pub type UID = u32;
 
 /// When players obtain skills(combat arts/prosthetic tools), skills become items in the inventory.
@@ -445,16 +446,27 @@ enum ProstheticSlot {
     S2 = PROSTHETIC_SLOT_2,
 }
 
+impl ProstheticSlot {
+    #[inline(always)]
+    fn as_index(self) -> usize {
+        self as usize
+    }
+    #[inline(always)]
+    fn as_prosthetic_index(self) -> u32 {
+        self as u32 / 2
+    }
+}
+
 fn set_combat_art(art: impl TryInto<ItemID>) -> bool {
     set_slot(art, COMBAT_ART_SLOT as usize)
 }
 
 fn equip_prosthetic(tool: impl TryInto<ItemID>, slot: ProstheticSlot) -> bool {
-    set_slot(tool, slot as usize)
+    set_slot(tool, slot.as_index())
 }
 
 fn set_slot(skill: impl TryInto<ItemID>, slot_index: usize) -> bool {
-    let Some(item_id) = skill.try_into().ok() else {
+    let Ok(item_id) = skill.try_into() else {
         return false;
     };
     let equip_data = &game::EquipData::new(item_id.get());
@@ -463,8 +475,8 @@ fn set_slot(skill: impl TryInto<ItemID>, slot_index: usize) -> bool {
 }
 
 fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
-    let slots = &player_data().equiped_items;
-    let item_id = slots[slot as usize];
+    let items = &player_data().equiped_items;
+    let item_id = items[slot.as_index()];
     if item_id != 256 {
         ItemID::new(item_id)
     } else {
@@ -484,12 +496,12 @@ fn get_active_prosthetic_slot() -> ProstheticSlot {
 }
 
 fn locate_prosthetic_tool(tool: impl TryInto<ItemID>) -> Option<ProstheticSlot> {
-    let slots = &player_data().equiped_items;
-    let Some(item_id) = tool.try_into().ok() else {
+    let items = &player_data().equiped_items;
+    let Ok(item_id) = tool.try_into() else {
         return None
     };
     for slot in [ProstheticSlot::S0, ProstheticSlot::S1, ProstheticSlot::S2] {
-        if slots[slot as usize] == item_id.get() {
+        if items[slot.as_index()] == item_id.get() {
             return Some(slot);
         }
     }
@@ -502,7 +514,7 @@ fn activate_prosthetic_slot(slot: ProstheticSlot) {
         let character_base: *const c_void = game::resolve_pointer_chain(game::WORLD_DATA, [0x88, 0x1F10, 0x10, 0xF8, 0x10, 0x18, 0x00]);
         *(character_base.byte_add(0x10) as *const *const c_void)
     };
-    game::set_equipped_prosthetic(unknown, 0, slot as u32 / 2);
+    game::set_equipped_prosthetic(unknown, 0, slot.as_prosthetic_index());
 }
 
 fn game_data<'a>() -> &'a game::GameData {

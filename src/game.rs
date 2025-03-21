@@ -102,7 +102,6 @@ forward! {
 //
 //----------------------------------------------------------------------------
 
-#[allow(unused)]
 #[inline(always)]
 pub unsafe fn resolve_pointer_chain<R, const N: usize>(root: usize, offsets: [usize;N]) -> *mut R {
     unsafe {
