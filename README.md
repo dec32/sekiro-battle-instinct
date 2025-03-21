@@ -53,21 +53,29 @@ Prosthetic tools follow similar principles.
 You can customize your control scheme by editing `battle_instinct.cfg`. Here's a short example:
 
 ```
-# This is a line of comment
+# Configuration for combat arts
 5300  Ichimonji
-7100  Ichimonji: Double  ∅
-5200  Nightjar Slash     ↑
-7600  Shadowfall         ↑↑
+7100  Ichimonji: Double           ∅
+5200  Nightjar Slash              ↑
+7600  Shadowfall                  ↑↑
+
+# Configuration for prosthetic tools
 70000 Loaded Shuriken
-70500 Lazulite Shuriken  ∅
-78300 Spiral Spear       ↑↑
+70500 Lazulite Shuriken           ∅
+78400 Leaping Flame               ↑
+78300 Spiral Spear                ↑
+76200 Suzakus Lotus Umbrealla     ⛨
+76300 Phoenixs Lilac Umbrella     ⛨
 ```
 
 The file is a plain text table formatted with whitespace characters. The first column stores the UIDs of the skills (combat arts or prosthetic tools). The last column specifies how you perform the skills. In the last column you can write:
 
 1. Nothing, which means this skill is ignored.
-2. `∅`, which means this is the default skill.
-3. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding motion inputs.
+2. A sequence of `↑`/`→`/`↓`/`←`, which spells the corresponding motion inputs.
+3. `∅`, which means this is the default skill.
+4. `⛨`, which means this is the prosthetic tool to use when <kbd>Block</kbd> is held.
+
+Notice that you can bind **multiple prosthetic tools** to the **same input sequence**. The MOD always prefers the already equipped prosthetic tools and tries to switch to them first. If none equiped, the MOD will choose the first one that is configured in the file.
 
 The columns in between store the names of the skills. They're only there for reference. Feel free to modify or delete them.
 
