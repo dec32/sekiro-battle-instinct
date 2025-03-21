@@ -62,7 +62,7 @@ You can customize your control scheme by editing `battle_instinct.cfg`. Here's a
 70500 Lazulite Shuriken           ∅
 78400 Leaping Flame               ↑
 78300 Spiral Spear                ↑
-76200 Suzakus Lotus Umbrealla     ⛨
+76200 Suzakus Lotus Umbrella      ⛨
 76300 Phoenixs Lilac Umbrella     ⛨
 ```
 
