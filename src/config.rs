@@ -116,7 +116,7 @@ fn parse_inputs(inputs: &str) -> Option<Inputs> {
 
 #[allow(unused)]
 fn possible_altenrnatives(inputs: &[Input]) -> Vec<Inputs> {
-    if inputs.len() >= 2 {
+    if inputs.len() == 2 {
         // fault tolerance for keyboards
         // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
         let mut possible_inputs = Vec::new();
@@ -137,7 +137,15 @@ fn possible_altenrnatives(inputs: &[Input]) -> Vec<Inputs> {
             }
         }
         possible_inputs
-    } else {
+    } else if inputs == &[Lt, Dn, Rt] {
+        vec![
+            Inputs::from([Lt, Rt, Dn]),
+            Inputs::from([Rt, Lt, Dn]),
+            Inputs::from([Rt, Dn, Lt]),
+            Inputs::from([Dn, Lt, Rt]),
+            Inputs::from([Dn, Rt, Lt]),
+        ]
+    } else{
         Vec::new()
     }
 }
@@ -164,5 +172,4 @@ fn test_load() {
 
     assert_eq!(config.tools.get_or_default(&[Lt, Rt]), &[74000]);
     assert_eq!(config.tools.get_or_default(&[Rt, Lt]), &[74000]);
-
 }

@@ -319,7 +319,7 @@ impl CombatArt for u32 {
             ASHINA_CROSS => 75,
             ONE_MIND => 240,
             SAKURA_DANCE => 60,
-            _ => 0,
+            _ => 60,
         }
     }
 }
