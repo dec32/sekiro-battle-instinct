@@ -1,9 +1,8 @@
 use std::{io, mem, num::NonZero, path::Path};
 use frame::{Fps, FrameCount};
-use input::InputBuffer;
 use config::Config;
 use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}};
-use crate::{config, frame, game::{self}, input::{self, Inputs}};
+use crate::{config, frame, input::InputBuffer, game::{self}};
 
 
 //----------------------------------------------------------------------------
@@ -220,7 +219,7 @@ impl Mod {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear();
-            self.config.arts.get(Inputs::new())
+            self.config.arts.get([])
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
             self.config.arts.get(inputs)

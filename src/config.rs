@@ -27,7 +27,7 @@ impl Config {
     }
 
     pub fn load(path: impl AsRef<Path>) -> io::Result<Config> {
-        let file = fs::read_to_string(path)?.to_ascii_lowercase();
+        let file = fs::read_to_string(path)?.to_ascii_uppercase();
         Ok(file.into())
     }
 }
@@ -63,9 +63,9 @@ impl<S: AsRef<str>> From<S> for Config {
             if tool {
                 // tools to use when BLOCK is heled, usually umbrella
                 match inputs {
-                    "⛨" | "block" | "防" =>  tools_for_block.push(id),
-                    "x1" | "m4" => tools_for_m4.push(id),
-                    "x2" | "m5" => tools_for_m5.push(id),
+                    "⛨" | "BLOCK" => tools_for_block.push(id),
+                    "X1" | "M4" => tools_for_m4.push(id),
+                    "X2" | "M5" => tools_for_m5.push(id),
                     other => if let Some(inputs) = parse_motion(other) {
                         used_inputs.insert(inputs.clone());
                         tools.entry(inputs.clone()).or_insert_with(Vec::new).push(id);
@@ -105,19 +105,13 @@ impl<S: AsRef<str>> From<S> for Config {
 
 // reuturns the input represented by the string and its alternative form when fault tolerance is available
 fn parse_motion(motion: &str) -> Option<Inputs> {
-    if matches!(motion, "∅" | "空" | "none") {
+    if matches!(motion, "∅" | "NONE") {
         Some(Inputs::new())
     } else {
         let chars = motion.chars();
         let char_count = chars.count();
         let inputs = motion.trim().chars()
-            .filter_map(|ch|match ch {
-                '↑'|'u'|'上' => Some(Up),
-                '→'|'r'|'右' => Some(Right),
-                '↓'|'d'|'下' => Some(Down),
-                '←'|'l'|'左' => Some(Left),
-                _ => None,
-            })
+            .filter_map(|ch|ch.try_into().ok())
             .collect::<Vec<_>>();
         // the last element of the line may not be the inputs but rather the name of the combat arts
         if inputs.len() != char_count {

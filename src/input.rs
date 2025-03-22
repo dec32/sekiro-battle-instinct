@@ -13,56 +13,14 @@ const COMMON_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
 const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
 const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
 
-/// I love type safety and readability.
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub enum Input {
-    Up = 0, Right = 1, Down = 2, Left = 3,
-}
-
-impl Input {
-    #[inline(always)]
-    fn from_repr(repr: u8) -> Input {
-        match repr {
-            0 => Up, 1 => Right, 2 => Down, 3 => Left,
-            _ => panic!("Illegal representation {repr}.")
-        }
-    }
-
-    #[inline(always)]
-    fn from_one_based(value: u8) -> Input {
-        Input::from_repr(value - 1)
-    }
-
-    #[inline(always)]
-    fn as_one_based(self) -> u8 {
-        self as u8 + 1
-    }
-}
-
-impl Debug for Input {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Up =>    write!(f, "↑"),
-            Self::Right => write!(f, "→"),
-            Self::Down =>  write!(f, "↓"),
-            Self::Left =>  write!(f, "←"),
-        }
-    }
-}
-
-impl Input {
-    pub fn opposite(self) -> Input {
-        Input::from_repr((self as u8 + 2) % 4)
-    }
-
-    pub fn rotate(self) -> Input {
-        Input::from_repr((self as u8 + 1) % 4)
-    }
-}
 
 
-/// An input buffer that remembers the most recent 3 motion inputs
-/// The buffer expires after several frames unless new inputs are pushed into it and reset its age
+//----------------------------------------------------------------------------
+//
+//  An input buffer that remembers the most recent 3 motion inputs
+//  The buffer expires after several frames unless new inputs are pushed into it and reset its age
+//
+//---------------------------------------------------------------------------- 
 pub struct InputBuffer {
     inputs: Inputs,
     frames: u16,
@@ -175,6 +133,173 @@ impl InputBuffer {
 
 //----------------------------------------------------------------------------
 //
+//  The input enum.
+//
+//----------------------------------------------------------------------------
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub enum Input {
+    Up = 0, Right = 1, Down = 2, Left = 3,
+}
+
+impl Input {
+    #[inline(always)]
+    pub fn opposite(self) -> Input {
+        Input::from_repr((self as u8 + 2) % 4)
+    }
+
+    #[inline(always)]
+    pub fn rotate(self) -> Input {
+        Input::from_repr((self as u8 + 1) % 4)
+    }
+
+    #[inline(always)]
+    fn from_repr(repr: u8) -> Input {
+        match repr {
+            0 => Up, 1 => Right, 2 => Down, 3 => Left,
+            _ => panic!("Illegal representation {repr}.")
+        }
+    }
+
+    #[inline(always)]
+    fn from_one_based(value: u8) -> Input {
+        Input::from_repr(value - 1)
+    }
+
+    #[inline(always)]
+    fn as_one_based(self) -> u8 {
+        self as u8 + 1
+    }
+}
+
+impl TryFrom<char> for Input {
+    type Error= ();
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value.to_ascii_uppercase() {
+            '↑'|'U' => Ok(Up),
+            '→'|'R' => Ok(Right),
+            '↓'|'D' => Ok(Down),
+            '←'|'L' => Ok(Left),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Debug for Input {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Up =>    write!(f, "↑"),
+            Self::Right => write!(f, "→"),
+            Self::Down =>  write!(f, "↓"),
+            Self::Left =>  write!(f, "←"),
+        }
+    }
+}
+
+//----------------------------------------------------------------------------
+//
+//  A pseudo-vec that can store a sequence of inputs in the form of the perfect
+//  hash of itself.
+//
+//----------------------------------------------------------------------------
+
+// todo: apparently it dosn't need to derive Hash
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Inputs {
+    hash: u8,
+    len: u8,
+}
+
+impl Inputs {
+    const BASE: u8 = 5;
+    const MAX_HASHCODE: usize = (Self::BASE.pow(INPUTS_CAP as u32) - 1) as usize;
+
+    #[inline(always)]
+    pub const fn new() -> Inputs {
+        Inputs { hash: 0, len: 0 }
+    }
+
+    #[inline(always)]
+    pub fn push(&mut self, input: Input) {
+        self.hash *= Self::BASE;
+        self.hash += input.as_one_based();
+        self.len += 1;
+    }
+
+    #[inline(always)]
+    pub fn pop(&mut self) -> Option<Input> {
+        let remainder = self.hash % Self::BASE;
+        if remainder == 0 {
+            None
+        } else {
+            self.hash /= Self::BASE;
+            self.len -= 1;
+            Some(Input::from_one_based(remainder))
+        }
+    }
+
+    #[inline(always)]
+    pub fn rev(mut self) -> Inputs {
+       let mut rev = Inputs::new();
+       while let Some(input) = self.pop() {
+            rev.push(input);
+       }
+       rev
+    }
+ 
+    #[inline(always)]
+    pub fn last(self) -> Option<Input> {
+        let last_digit = self.hash % Self::BASE;
+        if last_digit == 0 {
+            None
+        } else {
+            Some(Input::from_one_based(last_digit))
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.hash = 0;
+        self.len = 0;
+    }
+
+    #[inline(always)]
+    pub fn len(self) -> u8 {
+        self.len
+    }
+
+    #[inline(always)]
+    pub fn perfect_hash(self) -> usize {
+        self.hash as usize
+    }
+
+    #[inline(always)]
+    pub fn meant_for_art(self) -> bool {
+        self.len >= 2
+    }
+}
+
+
+impl FromIterator<Input> for Inputs {
+    #[inline(always)]
+    fn from_iter<T: IntoIterator<Item = Input>>(iter: T) -> Self {
+        let mut inputs = Inputs::new();
+        let mut iter = iter.into_iter();
+        while let Some(input) = iter.next() {
+            inputs.push(input);
+        }
+        inputs
+    }
+}
+
+impl<const N:usize> From<[Input;N]> for Inputs {
+    #[inline(always)]
+    fn from(array: [Input;N]) -> Self {
+        Inputs::from_iter(array.into_iter())
+    }
+}
+
+//----------------------------------------------------------------------------
+//
 //  An array-based trie that uses input sequence as keys
 //
 //----------------------------------------------------------------------------
@@ -190,116 +315,21 @@ impl<T:Copy> InputsTrie<T> {
     }
 
     pub fn get(&self, inputs: impl Into<Inputs>) -> Option<T> {
-        self.array[inputs.into().hashcode()]
+        self.array[inputs.into().perfect_hash()]
     }
 
     pub fn insert(&mut self, inputs: impl Into<Inputs>, value: T) {
-        self.array[inputs.into().hashcode()] = Some(value);
+        self.array[inputs.into().perfect_hash()] = Some(value);
     }
 
     pub fn try_insert(&mut self, inputs: impl Into<Inputs>, value: T) {
-        self.array[inputs.into().hashcode()].get_or_insert(value);
+        self.array[inputs.into().perfect_hash()].get_or_insert(value);
     }
 }
 
 impl<T: Default + Copy> InputsTrie<T> {
     pub fn get_or_default(&self, inputs: impl Into<Inputs>) -> T {
-        self.array[inputs.into().hashcode()].unwrap_or_default()
-    }
-}
-
-//----------------------------------------------------------------------------
-//
-//  A pseudo-vec that can store a sequence of inputs in the form of the perfect
-//  hash of itself.
-//
-//----------------------------------------------------------------------------
-
-// todo: apparently it dosn't need to derive Hash
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Inputs {
-    hashcode: u8,
-    len: u8,
-}
-
-impl Inputs {
-    const BASE: u8 = 5;
-    const MAX_HASHCODE: usize = u8::MAX as usize;
-
-    pub const fn new() -> Inputs {
-        Inputs {
-            hashcode: 0,
-            len: 0
-        }
-    }
-
-    pub fn push(&mut self, input: Input) {
-        self.hashcode *= Self::BASE;
-        self.hashcode += input.as_one_based();
-        self.len += 1;
-    }
-
-    pub fn pop(&mut self) -> Option<Input> {
-        let remainder = self.hashcode % Self::BASE;
-        if remainder == 0 {
-            None
-        } else {
-            self.hashcode /= Self::BASE;
-            self.len -= 1;
-            Some(Input::from_one_based(remainder))
-        }
-    }
-
-    pub fn rev(mut self) -> Inputs {
-       let mut rev = Inputs::new();
-       while let Some(input) = self.pop() {
-            rev.push(input);
-       }
-       rev
-    }
- 
-    pub fn last(self) -> Option<Input> {
-        let last_digit = self.hashcode % Self::BASE;
-        if last_digit == 0 {
-            None
-        } else {
-            Some(Input::from_one_based(last_digit))
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.hashcode = 0;
-        self.len = 0;
-    }
-
-    pub fn len(self) -> u8 {
-        self.len
-    }
-
-    pub fn hashcode(self) -> usize {
-        self.hashcode as usize
-    }
-
-    pub fn meant_for_art(self) -> bool {
-        self.len >= 2
-    }
-}
-
-
-impl FromIterator<Input> for Inputs {
-    fn from_iter<T: IntoIterator<Item = Input>>(iter: T) -> Self {
-        let mut inputs = Inputs::new();
-        let mut iter = iter.into_iter();
-        while let Some(input) = iter.next() {
-            inputs.push(input);
-        }
-        inputs
-    }
-}
-
-impl<const N:usize> From<[Input;N]> for Inputs {
-    fn from(array: [Input;N]) -> Self {
-        Inputs::from_iter(array.into_iter())
+        self.array[inputs.into().perfect_hash()].unwrap_or_default()
     }
 }
 
@@ -307,7 +337,7 @@ impl<const N:usize> From<[Input;N]> for Inputs {
 fn test_inputs() {
     fn assert_hash(inputs: impl Into<Inputs>, hashcode: &str) {
         let hashcode = u8::from_str_radix(hashcode, 5).unwrap();
-        assert_eq!(inputs.into().hashcode, hashcode)
+        assert_eq!(inputs.into().hash, hashcode)
     }
 
     assert_hash([Up], "1");
@@ -317,6 +347,7 @@ fn test_inputs() {
     assert_hash([Up, Up], "11");
     assert_hash([Up, Right], "12");
     assert_hash([Up, Right, Down], "123");
+    assert_hash([Left, Left, Left], "444");
 
     assert_eq!(Inputs::from([]).len(), 0);
     assert_eq!(Inputs::from([Up]).len(), 1);
