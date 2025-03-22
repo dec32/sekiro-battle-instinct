@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs, io, path::Path};
 use log::warn;
-use crate::{core::UID, input::{Input::{self, *}, Inputs, InputsTrie}};
+use crate::{core::UID, input::{Input::{*}, Inputs, InputsTrie}};
 
 const COMBART_ART_UID_MIN: UID  = 5000;
 const COMBART_ART_UID_MAX: UID  = 10000;
@@ -89,11 +89,11 @@ impl<S: AsRef<str>> From<S> for Config {
 
         // fault tolernce
         for inputs in used_inputs {
-            for alt_inputs in possible_altenrnatives(&inputs) {
-                if let Some(art) = config.arts.get(&inputs) {
+            for alt_inputs in possible_altenrnatives(inputs) {
+                if let Some(art) = config.arts.get(inputs) {
                     config.arts.try_insert(alt_inputs.clone(), art);
                 }
-                if let Some(tools) = config.tools.get(&inputs) {
+                if let Some(tools) = config.tools.get(inputs) {
                     config.tools.try_insert(alt_inputs.clone(), tools);
                 }
             }
@@ -128,29 +128,22 @@ fn parse_motion(motion: &str) -> Option<Inputs> {
 }
 
 #[allow(unused)]
-fn possible_altenrnatives(inputs: &[Input]) -> Vec<Inputs> {
+fn possible_altenrnatives(mut inputs: Inputs) -> Vec<Inputs> {
     if inputs.len() == 2 {
         // fault tolerance for keyboards
         // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
         let mut possible_inputs = Vec::new();
-        let mut rev = Inputs::new();
-        rev.push(inputs[1]);
-        rev.push(inputs[0]);
-        possible_inputs.push(rev);
-        if inputs[0] == inputs[1].opposite() {
-            for fault in [Up, Right, Down, Left] {
-                if fault == inputs[0] || fault == inputs[1] {
-                    continue;
-                }
-                let mut semicircle = Inputs::new();
-                semicircle.push(inputs[0]);
-                semicircle.push(fault);
-                semicircle.push(inputs[1]);
-                possible_inputs.push(semicircle);
-            }
+        possible_inputs.push(inputs.rev());
+
+        let a = inputs.pop().unwrap();
+        let b = inputs.pop().unwrap();
+        if a == b.opposite() {
+            let mut semicircle = Inputs::new();
+            possible_inputs.push(Inputs::from([a, a.rotate(), b]));
+            possible_inputs.push(Inputs::from([a, b.rotate(), b]));
         }
         possible_inputs
-    } else if inputs == &[Left, Down, Right] {
+    } else if inputs == [Left, Down, Right].into() {
         vec![
             Inputs::from([Left, Right, Down]),
             Inputs::from([Right, Left, Down]),
@@ -177,12 +170,12 @@ fn test_load() {
         ";
     let config = Config::from(raw);
 
-    assert_eq!(config.arts.get(&[]), Some(7100));
-    assert_eq!(config.tools.get_or_default(&[]), &[70000, 70100]);
+    assert_eq!(config.arts.get([]), Some(7100));
+    assert_eq!(config.tools.get_or_default([]), [70000, 70100]);
 
-    assert_eq!(config.arts.get(&[Left, Right]), Some(5600));
-    assert_eq!(config.arts.get(&[Right, Left]), Some(7200));
+    assert_eq!(config.arts.get([Left, Right]), Some(5600));
+    assert_eq!(config.arts.get([Right, Left]), Some(7200));
 
-    assert_eq!(config.tools.get_or_default(&[Left, Right]), &[74000]);
-    assert_eq!(config.tools.get_or_default(&[Right, Left]), &[74000]);
+    assert_eq!(config.tools.get_or_default([Left, Right]), &[74000]);
+    assert_eq!(config.tools.get_or_default([Right, Left]), &[74000]);
 }

@@ -1,9 +1,9 @@
 use std::{io, mem, num::NonZero, path::Path};
 use frame::{Fps, FrameCount};
-use input::{InputBuffer, InputsExt};
+use input::InputBuffer;
 use config::Config;
 use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}};
-use crate::{config, frame, game::{self}, input};
+use crate::{config, frame, game::{self}, input::{self, Inputs}};
 
 
 //----------------------------------------------------------------------------
@@ -157,7 +157,7 @@ impl Mod {
                 tools = self.config.tools_on_m5;
             }
             if tools.is_empty() && !self.buffer.expired() {
-                tools = self.config.tools.get_or_default(&inputs);
+                tools = self.config.tools.get_or_default([]);
             }
             tools
         } else {
@@ -170,7 +170,7 @@ impl Mod {
                         equip_prosthetic(ejected_tool, ProstheticSlot::S0);
                     }
                 }
-                self.config.tools.get_or_default(&[])
+                self.config.tools.get_or_default([])
             } else {
                 self.rollback_countdown.count_on(!using_tool);
                 &[]
@@ -220,10 +220,10 @@ impl Mod {
             // when there're no recent inputs and the block button is just pressed, roll back to the default art
             // also manually clear the input buffer so the desired art in the next few frames will still be the default art
             self.buffer.clear();
-            self.config.arts.get(&[])
+            self.config.arts.get(Inputs::new())
         } else {
             // Switch to the desired combat arts if the player is giving motion inputs
-            self.config.arts.get(&inputs)
+            self.config.arts.get(inputs)
         };
 
         /***** equip the desired combat art (or its fallback version) *****/ 
