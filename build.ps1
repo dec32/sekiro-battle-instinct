@@ -4,6 +4,7 @@ param (
 
 if ($Release) {
     cargo build --release
+    Copy-Item ".\target\release\battle_instinct.dll" -Destination "C:\Program Files (x86)\Steam\steamapps\common\Sekiro\dinput8.dll"
     New-Item -ItemType Directory -Force -Path ".\tmp"
     Copy-Item ".\target\release\battle_instinct.dll" -Destination ".\tmp\dinput8.dll"
 
