@@ -156,7 +156,7 @@ impl Mod {
                 tools = self.config.tools_on_m5;
             }
             if tools.is_empty() && !self.buffer.expired() {
-                tools = self.config.tools.get_or_default([]);
+                tools = self.config.tools.get_or_default(inputs);
             }
             tools
         } else {
