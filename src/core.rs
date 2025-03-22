@@ -270,24 +270,22 @@ impl Mod {
             }
         }
 
+        /***** action supression *****/
         // when binding umbrella to block+prosthetic, releasing slash gets a bit harder to perform 
         // because you need to release block first to prevent combat art from happening
         if used_tool_just_now {
             self.disable_block = true;
         }
-        if blocked_just_now {
+        if blocked_just_now || performed_art_just_now {
             self.disable_block = false;
         }
         if self.disable_block {
             *action &= !BLOCK;
         }
-
         // prosthetic tools may have extra keybind
         if using_tool {
             *action |= USE_PROSTHETIC;
         }
-
-        /***** action supression *****/
 
         // if ATTACK|BLOCK happens way too quick after combat art switching
         // Wirdwind Slash will be performed instead of the just equipped combat art
