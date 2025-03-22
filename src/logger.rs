@@ -26,7 +26,7 @@ pub fn setup() -> Result<()> {
                 message
             ))
         })
-        .level(if RELEASE { Warn } else { Trace })
+        .level(if RELEASE { Warn } else { Debug })
         .chain(fern::log_file(path)?)
         .apply()?;
     std::panic::set_hook(Box::new(|info|log::error!("{info}")));

@@ -112,14 +112,10 @@ fn parse_motion(motion: &str) -> Option<Inputs> {
         let char_count = chars.count();
         let inputs = motion.trim().chars()
             .filter_map(|ch|match ch {
-                '↑'|'8'|'u'|'上' => Some(Up),
-                '→'|'6'|'r'|'右' => Some(Rt),
-                '↓'|'2'|'d'|'下' => Some(Dn),
-                '←'|'4'|'l'|'左' => Some(Lt),
-                '↗'|'9' => Some(Ur),
-                '↘'|'3' => Some(Dr),
-                '↙'|'1' => Some(Dl),
-                '↖'|'7' => Some(Ul),
+                '↑'|'u'|'上' => Some(Up),
+                '→'|'r'|'右' => Some(Right),
+                '↓'|'d'|'下' => Some(Down),
+                '←'|'l'|'左' => Some(Left),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -142,7 +138,7 @@ fn possible_altenrnatives(inputs: &[Input]) -> Vec<Inputs> {
         rev.push(inputs[0]);
         possible_inputs.push(rev);
         if inputs[0] == inputs[1].opposite() {
-            for fault in [Up, Rt, Dn, Lt] {
+            for fault in [Up, Right, Down, Left] {
                 if fault == inputs[0] || fault == inputs[1] {
                     continue;
                 }
@@ -154,13 +150,13 @@ fn possible_altenrnatives(inputs: &[Input]) -> Vec<Inputs> {
             }
         }
         possible_inputs
-    } else if inputs == &[Lt, Dn, Rt] {
+    } else if inputs == &[Left, Down, Right] {
         vec![
-            Inputs::from([Lt, Rt, Dn]),
-            Inputs::from([Rt, Lt, Dn]),
-            Inputs::from([Rt, Dn, Lt]),
-            Inputs::from([Dn, Lt, Rt]),
-            Inputs::from([Dn, Rt, Lt]),
+            Inputs::from([Left, Right, Down]),
+            Inputs::from([Right, Left, Down]),
+            Inputs::from([Right, Down, Left]),
+            Inputs::from([Down, Left, Right]),
+            Inputs::from([Down, Right, Left]),
         ]
     } else{
         Vec::new()
@@ -184,9 +180,9 @@ fn test_load() {
     assert_eq!(config.arts.get(&[]), Some(7100));
     assert_eq!(config.tools.get_or_default(&[]), &[70000, 70100]);
 
-    assert_eq!(config.arts.get(&[Lt, Rt]), Some(5600));
-    assert_eq!(config.arts.get(&[Rt, Lt]), Some(7200));
+    assert_eq!(config.arts.get(&[Left, Right]), Some(5600));
+    assert_eq!(config.arts.get(&[Right, Left]), Some(7200));
 
-    assert_eq!(config.tools.get_or_default(&[Lt, Rt]), &[74000]);
-    assert_eq!(config.tools.get_or_default(&[Rt, Lt]), &[74000]);
+    assert_eq!(config.tools.get_or_default(&[Left, Right]), &[74000]);
+    assert_eq!(config.tools.get_or_default(&[Right, Left]), &[74000]);
 }
