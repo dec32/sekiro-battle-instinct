@@ -58,7 +58,7 @@ pub struct Mod {
     cur_art: Option<UID>,
     blocking_last_frame: bool,
     attacking_last_frame: bool,
-    using_tool_last_frame: bool, 
+    using_tool_last_frame: bool,
     swapout_countdown: Countdown,
     rollback_countdown: Countdown,
     attack_delay: u8,
@@ -84,8 +84,8 @@ impl Mod {
             attack_delay: 0,
             prosthetic_delay: 0,
             injected_blocks: 0,
-            ejected_tool: None,
             disable_block: false,
+            ejected_tool: None,
             gamepad: Gamepad::new(),
         }
     }
@@ -119,18 +119,8 @@ impl Mod {
             self.buffer.update_keys(up, right, down, left)
         };
 
-        /***** action pre-injection *****/
-        let action = &mut input_handler.action;
-
-        // extra keybind for prosthetic tools (sorry gamepads users)
-        if xbutton_1_down && !self.config.tools_on_m4.is_empty() {
-            *action |= USE_PROSTHETIC
-        }
-        if xbutton_2_down && !self.config.tools_on_m5.is_empty() {
-            *action |= USE_PROSTHETIC
-        }
-
         /***** parse the action bitflags *****/
+        let action = &mut input_handler.action;
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
         let using_tool = *action & USE_PROSTHETIC != 0;
@@ -138,9 +128,15 @@ impl Mod {
         let dodging = *action & DODGE != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
-        let used_tool_just_now = !self.using_tool_last_frame && using_tool;
 
         /***** query the desired prosthetic tool *****/
+        // notice that `using_tool` is shadowed and it has a different semantics
+        // than `attacking`, `blocking`, `jumping`, etc
+        let using_tool = using_tool
+            | (xbutton_1_down && !self.config.tools_on_m4.is_empty())
+            | (xbutton_2_down && !self.config.tools_on_m5.is_empty());
+        let used_tool_just_now = !self.using_tool_last_frame && using_tool;
+
         let desired_tools = if used_tool_just_now {
             // equip the alternative tools only right before using them
             // so that the prosthetic slot doesn't change on plain character movement
@@ -247,7 +243,7 @@ impl Mod {
             self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown(), self.fps.get())
         }
 
-        /***** action injection *****/ 
+        /***** action injection *****/
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK,
         // because the mod injects the BLOCK action for them
@@ -274,20 +270,6 @@ impl Mod {
             }
         }
 
-        // if ATTACK|BLOCK happens way too quick after combat art switching
-        // Wirdwind Slash will be performed instead of the just equipped combat art
-        // supressing the few ATTACK frames that happens right after combat art switching solves the bug
-        if self.attack_delay > 0 {
-            *action &= !ATTACK;
-            self.attack_delay -= 1;
-        }
-
-        // similar principle also goes for prosthetic tools
-        if self.prosthetic_delay != 0 {
-            *action &= !USE_PROSTHETIC;
-            self.prosthetic_delay -= 1;
-        }
-
         // when binding umbrella to block+prosthetic, releasing slash gets a bit harder to perform 
         // because you need to release block first to prevent combat art from happening
         if used_tool_just_now {
@@ -298,6 +280,26 @@ impl Mod {
         }
         if self.disable_block {
             *action &= !BLOCK;
+        }
+
+        // prosthetic tools may have extra keybind
+        if using_tool {
+            *action |= USE_PROSTHETIC;
+        }
+
+        /***** action supression *****/
+
+        // if ATTACK|BLOCK happens way too quick after combat art switching
+        // Wirdwind Slash will be performed instead of the just equipped combat art
+        // supressing the few ATTACK frames that happens right after combat art switching solves the bug
+        if self.attack_delay > 0 {
+            *action &= !ATTACK;
+            self.attack_delay -= 1;
+        }
+        // similar principle also goes for prosthetic tools
+        if self.prosthetic_delay != 0 {
+            *action &= !USE_PROSTHETIC;
+            self.prosthetic_delay -= 1;
         }
 
         /***** for next frame to refer to *****/
