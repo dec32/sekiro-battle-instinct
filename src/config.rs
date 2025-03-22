@@ -2,10 +2,17 @@ use std::{collections::{HashMap, HashSet}, fs, io, path::Path};
 use log::warn;
 use crate::{core::UID, input::{Input::{self, *}, Inputs, InputsTrie}};
 
+const COMBART_ART_UID_MIN: UID  = 5000;
+const COMBART_ART_UID_MAX: UID  = 10000;
+const PROSTHETIC_TOOL_UID_MIN: UID  = 70000;
+const PROSTHETIC_TOOL_UID_MAX: UID  = 100000;
+
 pub struct Config {
     pub arts: InputsTrie<UID>,
     pub tools: InputsTrie<&'static[UID]>,
     pub tools_for_block: &'static[UID],
+    pub tools_on_m4: &'static[UID],
+    pub tools_on_m5: &'static[UID],
 }
 
 impl Config {
@@ -14,6 +21,8 @@ impl Config {
             arts: InputsTrie::new(),
             tools: InputsTrie::new(),
             tools_for_block: &[],
+            tools_on_m4: &[],
+            tools_on_m5: &[],
         }
     }
 
@@ -28,6 +37,8 @@ impl<S: AsRef<str>> From<S> for Config {
         let mut config = Config::new();
         let mut tools = HashMap::<Inputs, Vec<UID>>::new();
         let mut tools_for_block = Vec::new();
+        let mut tools_for_m4 = Vec::new();
+        let mut tools_for_m5 = Vec::new();
         let mut used_inputs = HashSet::new();
         for line in value.as_ref().lines() {
             let mut items = line.split_whitespace()
@@ -40,36 +51,41 @@ impl<S: AsRef<str>> From<S> for Config {
                 continue;
             };
             // filter out all illegal IDs to prevent possible bugs
-            let is_art = match id {
-                5000..=10000 => true,
-                70000..=100000 => false,
+            let tool = match id {
+                PROSTHETIC_TOOL_UID_MIN..=PROSTHETIC_TOOL_UID_MAX => true,
+                COMBART_ART_UID_MIN..=COMBART_ART_UID_MAX => false,
                 _ => {
                     warn!("Illegal ID {id} is ignored."); 
                     continue;
                 }
             };
-            // tools to use when BLOCK is heled, usually umbrella
-            if matches!(inputs, "⛨" | "block" | "防") && !is_art {
-                tools_for_block.push(id);
-                continue;
-            }
-            let Some(inputs) = parse_inputs(inputs) else {
-                continue;
-            };
-            used_inputs.insert(inputs.clone());
 
-            if is_art {
-                config.arts.insert(inputs.clone(), id);
+            if tool {
+                // tools to use when BLOCK is heled, usually umbrella
+                match inputs {
+                    "⛨" | "block" | "防" =>  tools_for_block.push(id),
+                    "x1" | "m4" => tools_for_m4.push(id),
+                    "x2" | "m5" => tools_for_m5.push(id),
+                    other => if let Some(inputs) = parse_motion(other) {
+                        used_inputs.insert(inputs.clone());
+                        tools.entry(inputs.clone()).or_insert_with(Vec::new).push(id);
+                    }
+                }
             } else {
-                tools.entry(inputs).or_insert_with(Vec::new).push(id);
+                if let Some(inputs) = parse_motion(inputs) {
+                    used_inputs.insert(inputs.clone());
+                    config.arts.insert(inputs.clone(), id);
+                }
             }
         }
 
         // leak vecs into slices
-        config.tools_for_block = tools_for_block.leak();
         for (inputs, tools) in tools {
             config.tools.insert(inputs, tools.leak());
         }
+        config.tools_for_block = tools_for_block.leak();
+        config.tools_on_m4 = tools_for_m4.leak();
+        config.tools_on_m5 = tools_for_m5.leak();
 
         // fault tolernce
         for inputs in used_inputs {
@@ -86,14 +102,15 @@ impl<S: AsRef<str>> From<S> for Config {
     }
 }
 
+
 // reuturns the input represented by the string and its alternative form when fault tolerance is available
-fn parse_inputs(inputs: &str) -> Option<Inputs> {
-    if matches!(inputs, "∅" | "空" | "none") {
+fn parse_motion(motion: &str) -> Option<Inputs> {
+    if matches!(motion, "∅" | "空" | "none") {
         Some(Inputs::new())
     } else {
-        let chars = inputs.chars();
+        let chars = motion.chars();
         let char_count = chars.count();
-        let inputs = inputs.trim().chars()
+        let inputs = motion.trim().chars()
             .filter_map(|ch|match ch {
                 '↑'|'8'|'u'|'上' => Some(Up),
                 '→'|'6'|'r'|'右' => Some(Rt),

@@ -18,7 +18,7 @@ const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_ROLLBACK_COUNTDOWN: u16 = 120;
 
-// combat art UIDs
+// UIDs
 const ASHINA_CROSS: UID = 5500;
 const ONE_MIND: UID = 6100;
 const SAKURA_DANCE: UID = 7700;
@@ -97,8 +97,41 @@ impl Mod {
     }
 
     pub fn process_input(&mut self, input_handler: &mut game::InputHandler) {
-        // If you forget what a bitfield is please refer to Wikipedia
-        let action = &mut input_handler.action ;
+        /***** framerate tracking *****/
+        self.fps.tick();
+        self.buffer.update_fps(self.fps.get());
+    
+        /***** keystates *****/
+        let w_down = is_key_down(VK_W);
+        let a_down = is_key_down(VK_A);
+        let s_down = is_key_down(VK_S);
+        let d_down = is_key_down(VK_D);
+        let xbutton_1_down = is_key_down(VK_XBUTTON1);
+        let xbutton_2_down = is_key_down(VK_XBUTTON2);
+
+        /***** update the motion inputs *****/ 
+        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos|*pos != (0, 0)) {
+            self.buffer.update_joystick(x, y)
+        } else {
+            let up = w_down;
+            let right = d_down;
+            let down = s_down;
+            let left = a_down;
+            self.buffer.update_keys(up, right, down, left)
+        };
+
+        /***** action pre-injection *****/
+        let action = &mut input_handler.action;
+
+        // extra keybind for prosthetic tools (sorry gamepads users)
+        if xbutton_1_down && !self.config.tools_on_m4.is_empty() {
+            *action |= USE_PROSTHETIC
+        }
+        if xbutton_2_down && !self.config.tools_on_m5.is_empty() {
+            *action |= USE_PROSTHETIC
+        }
+
+        /***** parse the action bitflags *****/
         let attacking = *action & ATTACK != 0;
         let blocking = *action & BLOCK != 0;
         let using_tool = *action & USE_PROSTHETIC != 0;
@@ -108,32 +141,25 @@ impl Mod {
         let blocked_just_now = !self.blocking_last_frame && blocking;
         let used_tool_just_now = !self.using_tool_last_frame && using_tool;
 
-        self.fps.tick();
-        self.buffer.update_fps(self.fps.get());
-
-        // (0, 0) is filtered out so I can test the keyboard while the controller is still plugged in
-        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos|*pos != (0, 0)) {
-            self.buffer.update_joystick(x, y)
-        } else {
-            let up = is_key_down(VK_W);
-            let right = is_key_down(VK_D);
-            let down = is_key_down(VK_S);
-            let left = is_key_down(VK_A);
-            self.buffer.update_keys(up, right, down, left)
-        };
-
-        // prosthetic tools
+        /***** query the desired prosthetic tool *****/
         let desired_tools = if used_tool_just_now {
             // equip the alternative tools only right before using them
             // so that the prosthetic slot doesn't change on plain character movement
             self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
+            let mut tools: &[UID] = &[];
             if blocking {
-                self.config.tools_for_block
-            } else if !self.buffer.expired() {
-                self.config.tools.get_or_default(&inputs)
-            } else {
-                &[]
+                tools = self.config.tools_for_block;
             }
+            if tools.is_empty() && xbutton_1_down {
+                tools = self.config.tools_on_m4;
+            } 
+            if tools.is_empty() && xbutton_2_down {
+                tools = self.config.tools_on_m5;
+            }
+            if tools.is_empty() && !self.buffer.expired() {
+                tools = self.config.tools.get_or_default(&inputs);
+            }
+            tools
         } else {
             // equip the default tool as soon as it's availble
             // so that the rollback is reflected on the Prosthetic slot immediately
@@ -151,6 +177,7 @@ impl Mod {
             }
         };
 
+        /***** equip the desired prosthetic tool *****/ 
         if let Some(first_tool) = desired_tools.iter().cloned().next() {
             // when multiple tools are bind to the same inputs, use the already equiped one first
             let active_slot = get_active_prosthetic_slot();
@@ -173,12 +200,7 @@ impl Mod {
             self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
         }
 
-        if self.prosthetic_delay != 0 {
-            *action &= !USE_PROSTHETIC;
-            self.prosthetic_delay -= 1;
-        }
-
-        // combat arts
+        /***** query the desired combat art *****/ 
         let desired_art = if !self.swapout_countdown.done() {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
             if self.cur_art == Some(ONE_MIND) {
@@ -204,7 +226,7 @@ impl Mod {
             self.config.arts.get(&inputs)
         };
 
-        // equip the desired combat art or the fallback version
+        /***** equip the desired combat art (or its fallback version) *****/ 
         let mut performed_art_just_now = blocking && attacked_just_now;
         if let Some(desired_art) = desired_art {
             performed_art_just_now |= inputs.meant_for_art() && !self.buffer.expired() && attacked_just_now;
@@ -220,6 +242,13 @@ impl Mod {
             }
         }
 
+        // if combat art switching happens too quick after performing certain combat arts
+        // animation of other unrelated combat arts can be triggered
+        if performed_art_just_now && self.swapout_countdown.done() {
+            self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown(), self.fps.get())
+        }
+
+        /***** action injection *****/ 
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK,
         // because the mod injects the BLOCK action for them
@@ -246,13 +275,18 @@ impl Mod {
             }
         }
 
-
         // if ATTACK|BLOCK happens way too quick after combat art switching
         // Wirdwind Slash will be performed instead of the just equipped combat art
         // supressing the few ATTACK frames that happens right after combat art switching solves the bug
         if self.attack_delay > 0 {
             *action &= !ATTACK;
             self.attack_delay -= 1;
+        }
+
+        // similar principle also goes for prosthetic tools
+        if self.prosthetic_delay != 0 {
+            *action &= !USE_PROSTHETIC;
+            self.prosthetic_delay -= 1;
         }
 
         // when binding umbrella to block+prosthetic, releasing slash gets a bit harder to perform 
@@ -267,12 +301,7 @@ impl Mod {
             *action &= !BLOCK;
         }
 
-        // if combat art switching happens too quick after performing certain combat arts
-        // animation of other unrelated combat arts can be triggered
-        if performed_art_just_now && self.swapout_countdown.done() {
-            self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown(), self.fps.get())
-        }
-
+        /***** for next frame to refer to *****/
         self.attacking_last_frame = attacking;
         self.blocking_last_frame = blocking;
         self.using_tool_last_frame = using_tool;
