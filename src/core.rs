@@ -222,14 +222,15 @@ impl Mod {
         };
 
         /***** equip the desired combat art (or its fallback version) *****/ 
-        let mut performed_art_just_now = blocking && attacked_just_now;
+        let performed_art_just_now = blocking && attacked_just_now;
+        let mut performed_block_free_art_just_now = false;
         if let Some(desired_art) = desired_art {
-            performed_art_just_now |= inputs.meant_for_art() && !self.buffer.expired() && attacked_just_now;
+            performed_block_free_art_just_now = inputs.meant_for_art() && !self.buffer.expired() && attacked_just_now;
             if self.cur_art == Some(SAKURA_DANCE) {
                 // switching combat arts while using Sakura Dance triggers the falling animation of High Monk
                 // to cancel that unexpected animation, block/combat art need to take place
                 // thus the moment of switching is delayed to when block/combat art happens
-                if blocked_just_now || performed_art_just_now {
+                if blocked_just_now || performed_art_just_now || performed_block_free_art_just_now {
                     self.set_combat_art(desired_art);
                 }
             } else {
@@ -247,7 +248,7 @@ impl Mod {
         // inputs like [Up, Up] or [Down, Up] clearly means combat art usage intead of moving
         // in such cases, players can perform combat arts without pressing BLOCK,
         // because the mod injects the BLOCK action for them
-        if performed_art_just_now {
+        if performed_block_free_art_just_now {
             *action |= BLOCK;
             self.injected_blocks = 1;
         } else if self.injected_blocks >= 1 {
@@ -276,7 +277,7 @@ impl Mod {
         if used_tool_just_now {
             self.disable_block = true;
         }
-        if blocked_just_now || performed_art_just_now {
+        if blocked_just_now || performed_block_free_art_just_now {
             self.disable_block = false;
         }
         if self.disable_block {
