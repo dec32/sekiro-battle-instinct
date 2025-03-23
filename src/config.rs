@@ -11,8 +11,9 @@ pub struct Config {
     pub arts: InputsTrie<UID>,
     pub tools: InputsTrie<&'static[UID]>,
     pub tools_for_block: &'static[UID],
-    pub tools_on_m4: &'static[UID],
-    pub tools_on_m5: &'static[UID],
+    pub tools_for_block_release: &'static[UID],
+    pub tools_on_x1: &'static[UID],
+    pub tools_on_x2: &'static[UID],
 }
 
 impl Config {
@@ -21,8 +22,9 @@ impl Config {
             arts: InputsTrie::new(),
             tools: InputsTrie::new(),
             tools_for_block: &[],
-            tools_on_m4: &[],
-            tools_on_m5: &[],
+            tools_for_block_release: &[],
+            tools_on_x1: &[],
+            tools_on_x2: &[],
         }
     }
 
@@ -37,8 +39,9 @@ impl<S: AsRef<str>> From<S> for Config {
         let mut config = Config::new();
         let mut tools = HashMap::<Inputs, Vec<UID>>::new();
         let mut tools_for_block = Vec::new();
-        let mut tools_for_m4 = Vec::new();
-        let mut tools_for_m5 = Vec::new();
+        let mut tools_on_x1 = Vec::new();
+        let mut tools_on_x2 = Vec::new();
+        let mut tools_on_block_release = Vec::new();
         let mut used_inputs = HashSet::new();
         for line in value.as_ref().lines() {
             let mut items = line.split_whitespace()
@@ -63,9 +66,10 @@ impl<S: AsRef<str>> From<S> for Config {
             if tool {
                 // tools to use when BLOCK is heled, usually umbrella
                 match inputs {
+                    "X1" | "M4" => tools_on_x1.push(id),
+                    "X2" | "M5" => tools_on_x2.push(id),
                     "⛨" | "BLOCK" => tools_for_block.push(id),
-                    "X1" | "M4" => tools_for_m4.push(id),
-                    "X2" | "M5" => tools_for_m5.push(id),
+                    "⛨~" | "BLOCK-RELEASE" => tools_on_block_release.push(id),
                     other => if let Some(inputs) = parse_motion(other) {
                         used_inputs.insert(inputs.clone());
                         tools.entry(inputs.clone()).or_insert_with(Vec::new).push(id);
@@ -84,9 +88,10 @@ impl<S: AsRef<str>> From<S> for Config {
             config.tools.insert(inputs, tools.leak());
         }
         config.tools_for_block = tools_for_block.leak();
-        config.tools_on_m4 = tools_for_m4.leak();
-        config.tools_on_m5 = tools_for_m5.leak();
-
+        config.tools_for_block_release = tools_on_block_release.leak();
+        config.tools_on_x1 = tools_on_x1.leak();
+        config.tools_on_x2 = tools_on_x2.leak();
+        
         // fault tolernce
         for inputs in used_inputs {
             for alt_inputs in possible_altenrnatives(inputs) {
@@ -145,14 +150,13 @@ fn possible_altenrnatives(mut inputs: Inputs) -> Vec<Inputs> {
             Inputs::from([Down, Left, Right]),
             Inputs::from([Down, Right, Left]),
         ]
-    } else{
+    } else {
         Vec::new()
     }
 }
 
 #[test]
 fn test_load() {
-
     let raw = "
         # this is a line of comment
         7100  Ichimonji: Double           ∅  # comment
