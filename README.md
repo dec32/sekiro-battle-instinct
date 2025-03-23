@@ -64,12 +64,12 @@ You can customize your control scheme by editing `battle_instinct.cfg`. Here's a
 70000 Loaded Shuriken
 70500 Lazulite Shuriken           ∅
 76300 Phoenixs Lilac Umbrella     ⛊
-74200 Great Father Mist Raven     ⛉
+74200 Great Feather Mist Raven    ⛉
 78400 Leaping Flame               ↑↑
 78300 Spiral Spear                ↑↑
 
 # Extra Buttons
-74200 Great Father Mist Raven     X1
+74200 Great Feather Mist Raven     X1
 ```
 
 The file is a plain text table formatted with whitespace characters. The first column stores the UIDs of the skills (combat arts or prosthetic tools). The last column specifies how you perform the skills. In the last column you can write:
