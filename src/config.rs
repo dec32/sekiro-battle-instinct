@@ -68,8 +68,8 @@ impl<S: AsRef<str>> From<S> for Config {
                 match inputs {
                     "X1" | "M4" => tools_on_x1.push(id),
                     "X2" | "M5" => tools_on_x2.push(id),
-                    "⛨" | "BLOCK" => tools_for_block.push(id),
-                    "⛨~" | "BLOCK-RELEASE" => tools_on_block_release.push(id),
+                    "⛊" | "BLOCK" => tools_for_block.push(id),
+                    "⛉" | "BLOCK-RELEASE" => tools_on_block_release.push(id),
                     other => if let Some(inputs) = parse_motion(other) {
                         used_inputs.insert(inputs.clone());
                         tools.entry(inputs.clone()).or_insert_with(Vec::new).push(id);
