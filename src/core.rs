@@ -12,7 +12,7 @@ use crate::{config, frame, input::InputBuffer, game::{self}};
 //----------------------------------------------------------------------------
 
 // MOD behavior
-const BLOCK_RELEASE: u8 = 15;
+const BLOCK_RELEASE: u8 = 30;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
@@ -153,20 +153,20 @@ impl Mod {
             // so that the prosthetic slot doesn't change on plain character movement
             self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
             let mut tools: &[UID] = &[];
-            if self.block_release != 0 {
-                tools = self.config.tools_for_block_release
-            }
-            if tools.is_empty() && blocking {
-                tools = self.config.tools_for_block;
-            }
             if tools.is_empty() && x1_down {
                 tools = self.config.tools_on_x1;
             } 
             if tools.is_empty() && x2_down {
                 tools = self.config.tools_on_x2;
             }
+            if tools.is_empty() && blocking {
+                tools = self.config.tools_for_block;
+            }
             if tools.is_empty() && !self.buffer.expired() {
                 tools = self.config.tools.get_or_default(inputs);
+            }
+            if tools.is_empty() && self.block_release != 0 {
+                tools = self.config.tools_for_block_release
             }
             tools
         } else {
