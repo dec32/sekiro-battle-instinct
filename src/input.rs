@@ -1,18 +1,16 @@
 use std::fmt::Debug;
 use Input::*;
-
-use crate::frame::{FrameCount, DEFAULT_FPS};
+use crate::frame::Frames;
 
 // buffer behavior
-const INPUTS_CAP: u8 = 3;
-const MAX_INTERVAL: u16 = 10;
-const MAX_ATTACK_DELAY: u16 = 10;
+const MAX_INTERVAL: Frames = Frames::standard(10);
+const MAX_DELAY: Frames = Frames::standard(10);
+const MAX_DELAY_FOR_SINGLE_INPUT: Frames = Frames::standard(2);
 // joystick ergonomics
 const MAX_DISTANCE: u16 = i16::MAX as u16;
 const COMMON_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
 const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
 const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
-
 
 
 //----------------------------------------------------------------------------
@@ -26,7 +24,6 @@ pub struct InputBuffer {
     frames: u16,
     neutral: bool,
     keys_down: [bool; 4],
-    fps: u16,
 }
 
 impl InputBuffer {
@@ -36,12 +33,7 @@ impl InputBuffer {
             frames: 0,
             neutral: true,
             keys_down: [false; 4],
-            fps: DEFAULT_FPS,
         }
-    }
-
-    pub fn update_fps(&mut self, fps: u16) {
-        self.fps = fps;
     }
 
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
@@ -100,8 +92,7 @@ impl InputBuffer {
     }
 
     fn push(&mut self, input: Input) {
-        let max_interval = MAX_INTERVAL.adjust_to(self.fps);
-        if self.inputs.len() >= INPUTS_CAP || self.frames > max_interval {
+        if self.inputs.len() >= Inputs::CAP || self.frames > MAX_INTERVAL.as_actual() {
             self.inputs.clear();
         }
         self.inputs.push(input);
@@ -117,10 +108,9 @@ impl InputBuffer {
 
     pub fn expired(&self) -> bool {
         if self.inputs.len() == 1 {
-            self.neutral && self.keys_down == [false, false, false, false]
+            self.frames >= MAX_DELAY_FOR_SINGLE_INPUT.as_actual() && (self.neutral && self.keys_down == [false, false, false, false])
         } else {
-            let max_attack_delay = MAX_ATTACK_DELAY.adjust_to(self.fps);
-            self.frames >= max_attack_delay
+            self.frames >= MAX_DELAY.as_actual()
         }
     }
 
@@ -210,8 +200,9 @@ pub struct Inputs {
 }
 
 impl Inputs {
+    const CAP: u8 = 3;
     const BASE: u8 = 5;
-    const MAX_HASHCODE: usize = (Self::BASE.pow(INPUTS_CAP as u32) - 1) as usize;
+    const MAX_HASHCODE: usize = (Self::BASE.pow(Self::CAP as u32) - 1) as usize;
 
     #[inline(always)]
     pub const fn new() -> Inputs {

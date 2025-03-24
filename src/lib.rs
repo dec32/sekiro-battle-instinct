@@ -6,8 +6,9 @@ mod frame;
 mod logger;
 
 use core::Mod;
-use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, sync::{Mutex, OnceLock}, thread, time::Duration};
+use std::{ffi::{c_void, OsStr, OsString}, fs, mem, os::windows::ffi::{OsStrExt, OsStringExt}, path::{Path, PathBuf}, sync::{Mutex, OnceLock}, thread::{self}, time::Duration};
 use anyhow::{anyhow, Result};
+use frame::FRAMERATE;
 use minhook::MinHook;
 use windows::{core::{s, GUID, HRESULT, PCWSTR}, Win32::{Foundation::{GetLastError, HINSTANCE}, System::{LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW}, SystemInformation::GetSystemDirectoryW, SystemServices::DLL_PROCESS_ATTACH}}};
 
@@ -137,9 +138,8 @@ fn _modify(path: PathBuf) -> Result<()> {
 }
 
 fn process_input(input_handler: *mut game::InputHandler, arg: usize) -> usize {
+    unsafe { FRAMERATE.tick(); }
     MOD.lock().unwrap().process_input(unsafe { input_handler.as_mut().expect("input_handler is null") });
     let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
     process_input_orig(input_handler, arg)
 }
-
-

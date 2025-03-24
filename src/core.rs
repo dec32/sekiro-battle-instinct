@@ -1,8 +1,7 @@
 use std::{io, mem, num::NonZero, path::Path};
-use frame::{Fps, FrameCount};
 use config::Config;
 use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}};
-use crate::{config, frame, input::InputBuffer, game::{self}};
+use crate::{config, frame::Frames, game::{self}, input::InputBuffer};
 
 
 //----------------------------------------------------------------------------
@@ -16,7 +15,7 @@ const BLOCK_RELEASE: u8 = 30;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
-const PROSTHETIC_ROLLBACK_COUNTDOWN: u16 = 120;
+const PROSTHETIC_ROLLBACK_COUNTDOWN: Frames = Frames::standard(120);
 
 // UIDs
 const ASHINA_CROSS: UID = 5500;
@@ -53,7 +52,6 @@ const PROSTHETIC_SLOT_2: u8 = 4;
 //----------------------------------------------------------------------------
 
 pub struct Mod {
-    fps: Fps,
     config: Config,
     buffer: InputBuffer,
     cur_art: Option<UID>,
@@ -74,7 +72,6 @@ pub struct Mod {
 impl Mod {
     pub const fn new() -> Mod {
         Mod {
-            fps: Fps::new(),
             config: Config::new(),
             buffer: InputBuffer::new(),
             cur_art: None,
@@ -99,10 +96,6 @@ impl Mod {
     }
 
     pub fn process_input(&mut self, input_handler: &mut game::InputHandler) {
-        /***** framerate tracking *****/
-        self.fps.tick();
-        self.buffer.update_fps(self.fps.get());
-    
         /***** keystates *****/
         let w_down = is_key_down(VK_W);
         let a_down = is_key_down(VK_A);
@@ -151,7 +144,7 @@ impl Mod {
         let desired_tools = if used_tool_just_now {
             // equip the alternative tools only right before using them
             // so that the prosthetic slot doesn't change on plain character movement
-            self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN, self.fps.get());
+            self.rollback_countdown = Countdown::new(PROSTHETIC_ROLLBACK_COUNTDOWN);
             let mut tools: &[UID] = &[];
             if tools.is_empty() && x1_down {
                 tools = self.config.tools_on_x1;
@@ -255,7 +248,7 @@ impl Mod {
         // if combat art switching happens too quick after performing certain combat arts
         // animation of other unrelated combat arts can be triggered
         if performed_art_just_now && self.swapout_countdown.done() {
-            self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown(), self.fps.get())
+            self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown())
         }
 
         /***** action injection *****/
@@ -349,7 +342,7 @@ impl Mod {
 
 trait CombatArt {
     fn is_sheathed(self) -> bool;
-    fn swapout_cooldown(self) -> u16;
+    fn swapout_cooldown(self) -> Frames;
 }
 
 impl CombatArt for u32 {
@@ -357,13 +350,14 @@ impl CombatArt for u32 {
         matches!(self, ASHINA_CROSS | ONE_MIND)
     }
 
-    fn swapout_cooldown(self) -> u16 {
-        match self {
+    fn swapout_cooldown(self) -> Frames {
+        let frames = match self {
             ASHINA_CROSS => 75,
-            ONE_MIND => 240,
+            ONE_MIND     => 240,
             SAKURA_DANCE => 60,
-            _ => 60,
-        }
+            _ => 40,
+        };
+        Frames::standard(frames)
     }
 }
 
@@ -372,8 +366,8 @@ impl CombatArt for Option<u32> {
         self.map(CombatArt::is_sheathed).unwrap_or(false)
     }
 
-    fn swapout_cooldown(self) -> u16 {
-        self.map(CombatArt::swapout_cooldown).unwrap_or(0)
+    fn swapout_cooldown(self) -> Frames {
+        self.map(CombatArt::swapout_cooldown).unwrap_or(Frames::standard(0))
     }
 }
 
@@ -387,8 +381,8 @@ impl Countdown {
         Countdown { value: 0, running: false }
     }
 
-    fn new(value: u16, fps: u16) -> Countdown {
-        Countdown { value: value.adjust_to(fps), running: false }
+    fn new(value: Frames) -> Countdown {
+        Countdown { value: value.as_actual(), running: false }
     }
 
     fn count(&mut self) {
