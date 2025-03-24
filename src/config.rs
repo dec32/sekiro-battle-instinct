@@ -11,7 +11,6 @@ pub struct Config {
     pub arts: InputsTrie<UID>,
     pub tools: InputsTrie<&'static[UID]>,
     pub tools_for_block: &'static[UID],
-    pub tools_for_block_release: &'static[UID],
     pub tools_on_x1: &'static[UID],
     pub tools_on_x2: &'static[UID],
 }
@@ -22,7 +21,6 @@ impl Config {
             arts: InputsTrie::new(),
             tools: InputsTrie::new(),
             tools_for_block: &[],
-            tools_for_block_release: &[],
             tools_on_x1: &[],
             tools_on_x2: &[],
         }
@@ -41,7 +39,6 @@ impl<S: AsRef<str>> From<S> for Config {
         let mut tools_for_block = Vec::new();
         let mut tools_on_x1 = Vec::new();
         let mut tools_on_x2 = Vec::new();
-        let mut tools_on_block_release = Vec::new();
         let mut used_inputs = HashSet::new();
         for line in value.as_ref().lines() {
             let mut items = line.split_whitespace()
@@ -68,8 +65,7 @@ impl<S: AsRef<str>> From<S> for Config {
                 match inputs {
                     "X1" => tools_on_x1.push(id),
                     "X2" => tools_on_x2.push(id),
-                    "⛊" | "BLOCK" => tools_for_block.push(id),
-                    "⛉" | "BLOCK-RELEASE" => tools_on_block_release.push(id),
+                    "⛉" | "BLOCK" => tools_for_block.push(id),
                     other => if let Some(inputs) = parse_motion(other) {
                         used_inputs.insert(inputs.clone());
                         tools.entry(inputs.clone()).or_insert_with(Vec::new).push(id);
@@ -88,7 +84,6 @@ impl<S: AsRef<str>> From<S> for Config {
             config.tools.insert(inputs, tools.leak());
         }
         config.tools_for_block = tools_for_block.leak();
-        config.tools_for_block_release = tools_on_block_release.leak();
         config.tools_on_x1 = tools_on_x1.leak();
         config.tools_on_x2 = tools_on_x2.leak();
         

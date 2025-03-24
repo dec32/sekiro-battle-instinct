@@ -11,7 +11,6 @@ use crate::{config, frame::Frames, game::{self}, input::InputBuffer};
 //----------------------------------------------------------------------------
 
 // MOD behavior
-const BLOCK_RELEASE: u8 = 30;
 const BLOCK_INJECTION_DURATION: u8 = 10;
 const ATTACK_SUPRESSION_DURATION: u8 = 2;
 const PROSTHETIC_SUPRESSION_DURATION: u8 = 2;
@@ -63,7 +62,6 @@ pub struct Mod {
     attack_delay: u8,
     prosthetic_delay: u8,
     injected_blocks: u8,
-    block_release: u8,
     disable_block: bool,
     ejected_tool: Option<ItemID>,
     gamepad: Gamepad,
@@ -83,7 +81,6 @@ impl Mod {
             attack_delay: 0,
             prosthetic_delay: 0,
             injected_blocks: 0,
-            block_release: 0,
             disable_block: false,
             ejected_tool: None,
             gamepad: Gamepad::new(),
@@ -125,7 +122,6 @@ impl Mod {
         let dodging = *action & DODGE != 0;
         let attacked_just_now = !self.attacking_last_frame && attacking;
         let blocked_just_now = !self.blocking_last_frame && blocking;
-        let released_block_just_now = self.blocking_last_frame && !blocking;
 
         /***** query the desired prosthetic tool *****/
         // notice that `using_tool` is shadowed and it has a different semantics
@@ -134,12 +130,6 @@ impl Mod {
             | (x1_down && !self.config.tools_on_x1.is_empty())
             | (x2_down && !self.config.tools_on_x2.is_empty());
         let used_tool_just_now = !self.using_tool_last_frame && using_tool;
-
-        self.block_release = if released_block_just_now {
-            BLOCK_RELEASE
-        } else {
-            self.block_release.saturating_sub(1)
-        };
 
         let desired_tools = if used_tool_just_now {
             // equip the alternative tools only right before using them
@@ -157,9 +147,6 @@ impl Mod {
             }
             if tools.is_empty() && !self.buffer.expired() {
                 tools = self.config.tools.get_or_default(inputs);
-            }
-            if tools.is_empty() && self.block_release != 0 {
-                tools = self.config.tools_for_block_release
             }
             tools
         } else {
