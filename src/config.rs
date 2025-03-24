@@ -128,11 +128,13 @@ fn possible_altenrnatives(mut inputs: Inputs) -> Vec<Inputs> {
         // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
         let mut possible_inputs = Vec::new();
         possible_inputs.push(inputs.rev());
-
         let a = inputs.pop().unwrap();
         let b = inputs.pop().unwrap();
-        if a == b.opposite() {
-            let mut semicircle = Inputs::new();
+        if a == b {
+            // button smash
+            possible_inputs.push(Inputs::from([a, a, a]));
+        } else if a == b.opposite() {
+            // semicircle, for gamepads
             possible_inputs.push(Inputs::from([a, a.rotate(), b]));
             possible_inputs.push(Inputs::from([a, b.rotate(), b]));
         }
