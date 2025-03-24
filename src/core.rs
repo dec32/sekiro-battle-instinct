@@ -202,7 +202,7 @@ impl Mod {
             self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
         }
 
-        /***** query the desired combat art *****/ 
+        /***** query the desired combat art *****/
         let desired_art = if !self.swapout_countdown.done() {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
             if self.cur_art == Some(ONE_MIND) {
@@ -233,14 +233,11 @@ impl Mod {
         let mut performed_block_free_art_just_now = false;
         if let Some(desired_art) = desired_art {
             performed_block_free_art_just_now = inputs.meant_for_art() && !self.buffer.expired() && attacked_just_now;
-            if self.cur_art == Some(SAKURA_DANCE) {
-                // switching combat arts while using Sakura Dance triggers the falling animation of High Monk
-                // to cancel that unexpected animation, block/combat art need to take place
-                // thus the moment of switching is delayed to when block/combat art happens
-                if blocked_just_now || performed_art_just_now || performed_block_free_art_just_now {
-                    self.set_combat_art(desired_art);
-                }
-            } else {
+            // switching combat arts while using Sakura Dance triggers the falling animation of High Monk
+            // to cancel that unexpected animation, block/combat art need to take place
+            // thus the moment of switching is delayed to when block/combat art happens
+            // (this also applies to other combat arts actually but the buggy behavior is less noticable)
+            if blocked_just_now || performed_art_just_now || performed_block_free_art_just_now {
                 self.set_combat_art(desired_art);
             }
         }
