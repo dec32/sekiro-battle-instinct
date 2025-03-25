@@ -295,13 +295,13 @@ impl<const N:usize> From<[Input;N]> for Inputs {
 //
 //----------------------------------------------------------------------------
 pub struct InputsTrie<T> {
-    array: [Option<T>; Inputs::MAX_HASHCODE]
+    array: [Option<T>; Inputs::MAX_HASHCODE + 1]
 }
 
 impl<T:Copy> InputsTrie<T> {
     pub const fn new() -> InputsTrie<T> {
         InputsTrie {
-            array: [None; Inputs::MAX_HASHCODE]
+            array: [None; Inputs::MAX_HASHCODE + 1]
         }
     }
 
