@@ -1,6 +1,6 @@
-use std::{io, mem, num::NonZero, path::Path};
+use std::{io, num::NonZero, path::Path};
 use config::Config;
-use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::XInputGetState}};
+use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::{XInputGetState, XINPUT_STATE}}};
 use crate::{config, frame::Frames, game::{self}, input::InputBuffer};
 
 
@@ -190,49 +190,71 @@ impl Mod {
         }
 
         /***** query the desired combat art *****/
+        let mut performed_block_free_art_just_now = false;
+        let performed_art_just_now = blocking && attacked_just_now;
         let desired_art = if !self.swapout_countdown.done() {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
-            if self.cur_art == Some(ONE_MIND) {
-                // One Mind has two windows for animation bugs to happen
-                // one after pressing ATTACK (sheathing) and one after releasing ATTACK (drawing)
-                // the current (ugly) solution is to apply the cooldown after pressing ATTACK,
-                // but only start counting it down after ATTACK is released
-                self.swapout_countdown.count_on(!attacking);
-            } else {
-                self.swapout_countdown.count();
-            }
-            self.cur_art
-        } else if attacking && self.cur_art.is_sheathed() {
-            // keep using the same combat art when the player is still sheathing
-            self.cur_art
-        } else if blocked_just_now && self.buffer.expired() {
-            // when there're no recent inputs and the block button is just pressed, roll back to the default art
-            // also manually clear the input buffer so the desired art in the next few frames will still be the default art
-            self.buffer.clear();
-            self.config.arts.get([])
-        } else {
-            // Switch to the desired combat arts if the player is giving motion inputs
-            self.config.arts.get(inputs)
-        };
-
-        /***** equip the desired combat art (or its fallback version) *****/ 
-        let performed_art_just_now = blocking && attacked_just_now;
-        let mut performed_block_free_art_just_now = false;
-        if let Some(desired_art) = desired_art {
-            performed_block_free_art_just_now = inputs.meant_for_art() && !self.buffer.expired() && attacked_just_now;
-            // switching combat arts while using Sakura Dance triggers the falling animation of High Monk
+            // One Mind has two windows for animation bugs to happen
+            // one after pressing ATTACK (sheathing) and one after releasing ATTACK (drawing)
+            // the current (ugly) solution is to apply the cooldown after pressing ATTACK,
+            // but only start counting it down after ATTACK is released
+            self.swapout_countdown.count_on(!attacking);
+            None
+        } else if attacked_just_now {
+            // only switch combat arts right before they are performed or else bugs can happen
+            // for example, doing it while using Sakura Dance triggers the falling animation of High Monk
             // to cancel that unexpected animation, block/combat art need to take place
             // thus the moment of switching is delayed to when block/combat art happens
-            // (this also applies to other combat arts actually but the buggy behavior is less noticable)
-            if blocked_just_now || performed_art_just_now || performed_block_free_art_just_now {
-                self.set_combat_art(desired_art);
+            if !self.buffer.expired() {
+                let art = self.config.arts.get(inputs);
+                if art.is_some() && inputs.meant_for_art() {
+                    performed_block_free_art_just_now = true;
+                }
+                art
+            } else {
+                // rolling back is postponed to when BLOCK is pressed
+                None
             }
-        }
+        } else if blocked_just_now {
+            if self.buffer.expired() {
+                // when there're no recent inputs and the block button is just pressed, roll back to the default art
+                // also manually clear the input buffer so the desired art in the next few frames will still be the default art
+                self.buffer.clear();
+                self.config.arts.get([])
+            } else {
+                self.config.arts.get(inputs)
+            }
+        } else {
+            None
+        };
 
         // if combat art switching happens too quick after performing certain combat arts
         // animation of other unrelated combat arts can be triggered
-        if performed_art_just_now && self.swapout_countdown.done() {
+        if performed_art_just_now || performed_block_free_art_just_now && self.swapout_countdown.done() {
             self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown())
+        }
+
+        /***** equip the desired combat art (or its fallback version) *****/ 
+        if let Some(desired_art) = desired_art {
+            let mut desired_art = desired_art;
+            loop {
+                if self.cur_art == Some(desired_art) {
+                    break;
+                }
+                if set_combat_art(desired_art) {
+                    self.cur_art = Some(desired_art);
+                    self.attack_delay = ATTACK_SUPRESSION_DURATION;
+                    break;
+                }
+                desired_art = match desired_art {
+                    ICHIMONJI_DOUBLE =>         ICHIMONJI,
+                    PRAYING_STRIKES_EXORCISM => PRAYING_STRIKES,
+                    HIGH_MONK =>                SENPO_LEAPING_KICKS,
+                    SHADOWFALL =>               SHADOWRUSH,
+                    EMPOWERED_MORTAL_DRAW =>    MORTAL_DRAW,
+                    _ => { break; }
+                }
+            }
         }
 
         /***** action injection *****/
@@ -263,8 +285,9 @@ impl Mod {
         }
 
         /***** action supression *****/
-        // when binding umbrella to block+prosthetic, releasing slash gets a bit harder to perform 
-        // because you need to release block first to prevent combat art from happening
+        // when binding umbrella to BLOCK|USE_PROSTHETIC, cross slash gets a bit harder to perform 
+        // because now players need to release BLOCK first to prevent combat arts from happening
+        // the solution is, of course, supress BLOCK for the player 
         if used_tool_just_now {
             self.disable_block = true;
         }
@@ -297,39 +320,14 @@ impl Mod {
         self.blocking_last_frame = blocking;
         self.using_tool_last_frame = using_tool;
     }
-
-
-    fn set_combat_art(&mut self, art: u32) {
-        // equipping the same combat art again can unequip the combat art
-        if self.cur_art == Some(art) {
-            return;
-        }
-        if set_combat_art(art) {
-            self.cur_art = Some(art);
-            self.attack_delay = ATTACK_SUPRESSION_DURATION;
-            return;
-        }
-
-        let fallback = match art {
-            ICHIMONJI_DOUBLE =>         Some(ICHIMONJI),
-            PRAYING_STRIKES_EXORCISM => Some(PRAYING_STRIKES),
-            HIGH_MONK =>                Some(SENPO_LEAPING_KICKS),
-            SHADOWFALL =>               Some(SHADOWRUSH),
-            EMPOWERED_MORTAL_DRAW =>    Some(MORTAL_DRAW),
-            _ => None
-        };
-        if let Some(fallback) = fallback {
-            self.set_combat_art(fallback)
-        }
-    }
 }
 
-trait CombatArt {
+trait CombatArt: Sized {
     fn is_sheathed(self) -> bool;
     fn swapout_cooldown(self) -> Frames;
 }
 
-impl CombatArt for u32 {
+impl CombatArt for UID {
     fn is_sheathed(self) -> bool {
         matches!(self, ASHINA_CROSS | ONE_MIND)
     }
@@ -345,7 +343,7 @@ impl CombatArt for u32 {
     }
 }
 
-impl CombatArt for Option<u32> {
+impl CombatArt for Option<UID> {
     fn is_sheathed(self) -> bool {
         self.map(CombatArt::is_sheathed).unwrap_or(false)
     }
@@ -418,7 +416,7 @@ impl Gamepad {
             return None;
         }
         // checking controllers
-        let mut xinput_state = unsafe { mem::zeroed() };
+        let mut xinput_state = XINPUT_STATE::default();
         for idx in self.latest_idx..self.latest_idx + Self::XUSER_MAX_COUNT {
             let idx = idx % Self::XUSER_MAX_COUNT;
             let res = unsafe { XInputGetState(idx, &mut xinput_state) };
