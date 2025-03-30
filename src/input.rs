@@ -7,10 +7,10 @@ const MAX_INTERVAL: Frames = Frames::standard(10);
 const MAX_DELAY: Frames = Frames::standard(10);
 const MAX_DELAY_FOR_SINGLE_INPUT: Frames = Frames::standard(2);
 // joystick ergonomics
-const MAX_DISTANCE: u16 = i16::MAX as u16;
 const COMMON_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
 const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
 const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
+const MAX_DISTANCE: u16 = i16::MAX as u16;
 
 
 //----------------------------------------------------------------------------
@@ -108,10 +108,14 @@ impl InputBuffer {
 
     pub fn expired(&self) -> bool {
         if self.inputs.len() == 1 {
-            self.frames >= MAX_DELAY_FOR_SINGLE_INPUT.as_actual() && (self.neutral && self.keys_down == [false, false, false, false])
+            self.frames >= MAX_DELAY_FOR_SINGLE_INPUT.as_actual() && self.released()
         } else {
             self.frames >= MAX_DELAY.as_actual()
         }
+    }
+
+    fn released(&self) -> bool {
+        self.neutral && self.keys_down == [false, false, false, false]
     }
 
     pub fn clear(&mut self) {
