@@ -67,14 +67,14 @@ impl<S: AsRef<str>> From<S> for Config {
                     "X2"|"M5" => tools_on_x2.push(id),
                     "⛉" | "BLOCK" => tools_for_block.push(id),
                     other => if let Some(inputs) = parse_motion(other) {
-                        used_inputs.insert(inputs.clone());
-                        tools.entry(inputs.clone()).or_insert_with(Vec::new).push(id);
+                        used_inputs.insert(inputs);
+                        tools.entry(inputs).or_insert_with(Vec::new).push(id);
                     }
                 }
             } else {
                 if let Some(inputs) = parse_motion(inputs) {
-                    used_inputs.insert(inputs.clone());
-                    config.arts.insert(inputs.clone(), id);
+                    used_inputs.insert(inputs);
+                    config.arts.insert(inputs, id);
                 }
             }
         }
@@ -91,10 +91,10 @@ impl<S: AsRef<str>> From<S> for Config {
         for inputs in used_inputs {
             for alt_inputs in possible_altenrnatives(inputs) {
                 if let Some(art) = config.arts.get(inputs) {
-                    config.arts.try_insert(alt_inputs.clone(), art);
+                    config.arts.try_insert(alt_inputs, art);
                 }
                 if let Some(tools) = config.tools.get(inputs) {
-                    config.tools.try_insert(alt_inputs.clone(), tools);
+                    config.tools.try_insert(alt_inputs, tools);
                 }
             }
         }
