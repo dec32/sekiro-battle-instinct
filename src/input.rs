@@ -197,7 +197,7 @@ impl Debug for Input {
 //----------------------------------------------------------------------------
 
 // todo: apparently it dosn't need to derive Hash
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Inputs {
     hash: u8,
     len: u8,
@@ -211,6 +211,25 @@ impl Inputs {
     #[inline(always)]
     pub const fn new() -> Inputs {
         Inputs { hash: 0, len: 0 }
+    }
+
+    #[inline(always)]
+    pub fn from_perfect_hash(hash: usize) -> Inputs {
+        if hash > Self::MAX_HASHCODE {
+            panic!("Illegal hash code {hash} for inputs.");
+        }
+        let hash = hash as u8;
+
+        let mut len = 0;
+        let mut tmp = hash;
+        loop {
+            if tmp == 0 {
+                break;
+            }
+            len += 1;
+            tmp /= Self::BASE;
+        }
+        Inputs { hash, len }
     }
 
     #[inline(always)]
@@ -293,6 +312,22 @@ impl<const N:usize> From<[Input;N]> for Inputs {
     }
 }
 
+impl Debug for Inputs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut inputs = [Input::Up; Self::CAP as usize];
+        let mut len = 0;
+
+        let mut cloned = self.clone();
+        while let Some(input) = cloned.pop() {
+            inputs[len] = input;
+            len += 1;
+        }
+        let inputs = &mut inputs[..len];
+        inputs.reverse();
+        f.debug_list().entries(inputs).finish()
+    }
+}
+
 //----------------------------------------------------------------------------
 //
 //  An array-based trie that uses input sequence as keys
@@ -320,11 +355,27 @@ impl<T:Copy> InputsTrie<T> {
     pub fn try_insert(&mut self, inputs: impl Into<Inputs>, value: T) {
         self.array[inputs.into().perfect_hash()].get_or_insert(value);
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (Inputs, T)> {
+        self.array
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter_map(|(hash, value)|Some((Inputs::from_perfect_hash(hash), value?)))
+    }
 }
 
 impl<T: Default + Copy> InputsTrie<T> {
     pub fn get_or_default(&self, inputs: impl Into<Inputs>) -> T {
         self.array[inputs.into().perfect_hash()].unwrap_or_default()
+    }
+}
+
+impl<T> Debug for InputsTrie<T>
+where T: Debug + Copy
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
