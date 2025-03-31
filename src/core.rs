@@ -203,21 +203,17 @@ impl Mod {
             // but only start counting it down after ATTACK is released
             self.swapout_countdown.count_on(!attacking);
             None
-        } else if attacked_just_now {
+        } else if attacked_just_now && !self.buffer.expired() {
+            // rolling back is postponed to when BLOCK is pressed
             // only switch combat arts right before they are performed or else bugs can happen
             // for example, doing it while using Sakura Dance triggers the falling animation of High Monk
             // to cancel that unexpected animation, block/combat art need to take place
             // thus the moment of switching is delayed to when block/combat art happens
-            if !self.buffer.expired() {
-                let art = self.config.arts.get(inputs);
-                if art.is_some() && inputs.meant_for_art() {
+            self.config.arts.get(inputs).inspect(|_|{
+                if inputs.meant_for_art() {
                     performed_block_free_art_just_now = true;
                 }
-                art
-            } else {
-                // rolling back is postponed to when BLOCK is pressed
-                None
-            }
+            })
         } else if blocked_just_now {
             if self.buffer.expired() {
                 // when there're no recent inputs and the block button is just pressed, roll back to the default art
