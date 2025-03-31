@@ -1,4 +1,4 @@
-use std::{io, num::NonZero, path::Path};
+use std::{fmt::Display, io, num::NonZero, path::Path};
 use config::Config;
 use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::{XInputGetState, XINPUT_STATE}}};
 use crate::{config, frame::Frames, game::{self}, input::InputBuffer};
@@ -463,14 +463,32 @@ impl ItemID {
     }
 }
 
-impl TryFrom<UID> for ItemID {
-    type Error = ();
+impl Display for ItemID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0.get(), f)
+    }
+}
+
+
+
+// Conversion between UID and ItemId
+trait ID: Display + Clone + Copy {
+    fn get_item_id(self) -> Option<ItemID>;
+}
+
+impl ID for ItemID {
     #[inline(always)]
-    fn try_from(uid: UID) -> Result<Self, Self::Error> {
+    fn get_item_id(self) -> Option<ItemID> {
+        Some(self)
+    }
+}
+
+impl ID for UID {
+    #[inline(always)]
+    fn get_item_id(self) -> Option<ItemID> {
         let inventory = &inventory_data().inventory;
-        let uid = &uid;
-        let item_id = game::get_item_id(inventory, uid);
-        ItemID::new(item_id).filter(|it|it.get() < 0xFFFF).ok_or(())
+        let item_id = game::get_item_id(inventory, &self);
+        ItemID::new(item_id).filter(|it|it.get() < 0xFFFF)
     }
 }
 
@@ -493,16 +511,16 @@ impl ProstheticSlot {
     }
 }
 
-fn set_combat_art(art: impl TryInto<ItemID>) -> bool {
+fn set_combat_art(art: impl ID) -> bool {
     set_slot(art, COMBAT_ART_SLOT as usize)
 }
 
-fn equip_prosthetic(tool: impl TryInto<ItemID>, slot: ProstheticSlot) -> bool {
+fn equip_prosthetic(tool: impl ID, slot: ProstheticSlot) -> bool {
     set_slot(tool, slot.as_index())
 }
 
-fn set_slot(skill: impl TryInto<ItemID>, slot_index: usize) -> bool {
-    let Ok(item_id) = skill.try_into() else {
+fn set_slot(item: impl ID, slot_index: usize) -> bool {
+    let Some(item_id) = item.get_item_id() else {
         return false;
     };
     let equip_data = &game::EquipData::new(item_id.get());
@@ -531,9 +549,9 @@ fn get_active_prosthetic_slot() -> ProstheticSlot {
     active_slot
 }
 
-fn locate_prosthetic_tool(tool: impl TryInto<ItemID>) -> Option<ProstheticSlot> {
+fn locate_prosthetic_tool(tool: impl ID) -> Option<ProstheticSlot> {
     let items = &player_data().equiped_items;
-    let Ok(item_id) = tool.try_into() else {
+    let Some(item_id) = tool.get_item_id() else {
         return None
     };
     for slot in [ProstheticSlot::S0, ProstheticSlot::S1, ProstheticSlot::S2] {
