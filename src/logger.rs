@@ -1,4 +1,4 @@
-use std::{env, fs, os::windows::fs::MetadataExt, path::PathBuf};
+use std::{env, fs::{self}, os::windows::fs::MetadataExt, path::PathBuf};
 use chrono::Local;
 use log::{self, Level, LevelFilter::*};
 use anyhow::Result;
@@ -41,8 +41,8 @@ impl LevelExt for Level {
     fn abbr(self) -> &'static str {
         match self {
             Level::Error => "ERR",
-            Level::Warn =>  "WRN",
-            Level::Info =>  "INF",
+            Level::Warn  => "WRN",
+            Level::Info  => "INF",
             Level::Debug => "DBG",
             Level::Trace => "TRC",
         }

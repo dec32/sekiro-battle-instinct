@@ -8,6 +8,7 @@ use std::ffi::c_void;
 
 // fucntions
 pub const PROCESS_INPUT: usize = 0x140B2C190;
+pub const GET_ITEM_NAME: usize = 0x1410AA340;
 pub const GET_ITEM_ID: usize = 0x140C3D680;
 pub const SET_SLOT: usize = 0x140D592F0;
 pub const SET_EQUIPED_PROTHSETIC: usize = 0x140A26150;
@@ -15,6 +16,7 @@ pub const SET_EQUIPED_PROTHSETIC: usize = 0x140A26150;
 // objects
 pub const GAME_DATA: usize = 0x143D5AAC0;
 pub const WORLD_DATA: usize = 0x143D7A1E0;
+pub const MSG_REPO: usize = 0x143D964C8;
 
 //----------------------------------------------------------------------------
 //
@@ -24,6 +26,10 @@ pub const WORLD_DATA: usize = 0x143D7A1E0;
 
 pub fn game_data() -> *const GameData {
     unsafe { *(GAME_DATA as *const *const GameData) }
+}
+
+pub fn msg_repo() -> *const c_void {
+    unsafe { *(MSG_REPO as *const *const c_void) }
 }
 
 #[repr(C)]
@@ -84,6 +90,9 @@ macro_rules! forward {
 }
 
 forward! {
+    @[GET_ITEM_NAME]
+    fn get_item_name(msg_repo: *const c_void, uid: u32) -> *const u16;
+    
     @[GET_ITEM_ID]
     fn get_item_id(inventory: *const c_void, uid: *const u32) -> u32;
 

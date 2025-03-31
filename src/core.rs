@@ -1,7 +1,6 @@
 use std::{fmt::Display, io, num::NonZero, path::Path};
-use config::Config;
 use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::{XInputGetState, XINPUT_STATE}}};
-use crate::{config, frame::Frames, game::{self}, input::InputBuffer};
+use crate::{config::Config, frame::Frames, game::{self}, input::InputBuffer};
 
 
 //----------------------------------------------------------------------------
@@ -167,19 +166,23 @@ impl Mod {
         };
 
         /***** equip the desired prosthetic tool *****/ 
-        if let Some(first_tool) = desired_tools.iter().cloned().next() {
+        if !desired_tools.is_empty() {
             // when multiple tools are bind to the same inputs, use the already equiped one first
             let active_slot = get_active_prosthetic_slot();
             let target_slot = desired_tools.iter().cloned()
                 .filter_map(locate_prosthetic_tool)
                 .next();
-            // if none equipped, simply use the first one in the list
+            // if none equipped, simply use the first one (that is owned by the player) in the list
             let target_slot = match target_slot {
                 Some(tagret_slot) => tagret_slot,
                 None => {
                     // eject the tool at the slot 0 and revert it later
                     self.ejected_tool = self.ejected_tool.or(get_prosthetic_tool(ProstheticSlot::S0));
-                    equip_prosthetic(first_tool, ProstheticSlot::S0);
+                    for tool in desired_tools.iter().cloned() {
+                        if equip_prosthetic(tool, ProstheticSlot::S0) {
+                            break;
+                        }
+                    }
                     ProstheticSlot::S0
                 }
             };

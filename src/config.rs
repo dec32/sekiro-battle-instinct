@@ -1,12 +1,13 @@
 use std::{collections::{HashMap, HashSet}, fs, io, path::Path};
-use log::warn;
-use crate::{core::UID, input::{Input::{*}, Inputs, InputsTrie}};
+use widestring::U16CStr;
+use crate::{core::UID, game, input::{Input::*, Inputs, InputsTrie}};
 
 const COMBART_ART_UID_MIN: UID  = 5000;
 const COMBART_ART_UID_MAX: UID  = 10000;
 const PROSTHETIC_TOOL_UID_MIN: UID  = 70000;
 const PROSTHETIC_TOOL_UID_MAX: UID  = 100000;
 
+#[derive(Debug)]
 pub struct Config {
     pub arts: InputsTrie<UID>,
     pub tools: InputsTrie<&'static[UID]>,
@@ -55,7 +56,7 @@ impl<S: AsRef<str>> From<S> for Config {
                 PROSTHETIC_TOOL_UID_MIN..=PROSTHETIC_TOOL_UID_MAX => true,
                 COMBART_ART_UID_MIN..=COMBART_ART_UID_MAX => false,
                 _ => {
-                    warn!("Illegal ID {id} is ignored."); 
+                    log::warn!("Illegal ID {id} is ignored."); 
                     continue;
                 }
             };
@@ -149,6 +150,18 @@ fn possible_altenrnatives(mut inputs: Inputs) -> Vec<Inputs> {
         ]
     } else {
         Vec::new()
+    }
+}
+
+
+#[allow(unused)]
+fn get_item_name(uid: UID) -> Option<String> {
+    let p = game::get_item_name(game::msg_repo(), uid);
+    if p.is_null() {
+        return None;
+    } else {
+        let name = unsafe { U16CStr::from_ptr_str(p) };
+        Some(name.to_string_lossy())
     }
 }
 

@@ -11,6 +11,7 @@ log = "0.4"
 fern = "0.6"
 chrono = "0.4"
 minhook = "0.6.0"
+widestring = "1.2.0"
 
 
 [dependencies.windows]
