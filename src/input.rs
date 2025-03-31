@@ -21,7 +21,7 @@ const MAX_DISTANCE: u16 = i16::MAX as u16;
 //---------------------------------------------------------------------------- 
 pub struct InputBuffer {
     inputs: Inputs,
-    frames: u16,
+    age: u16,
     neutral: bool,
     keys_down: [bool; 4],
 }
@@ -30,7 +30,7 @@ impl InputBuffer {
     pub const fn new() -> InputBuffer {
         InputBuffer {
             inputs: Inputs::new(),
-            frames: 0,
+            age: 0,
             neutral: true,
             keys_down: [false; 4],
         }
@@ -46,7 +46,7 @@ impl InputBuffer {
             }
             self.keys_down[i] = down;
         }
-        self.incr_frames(updated);
+        self.age(updated);
         self.inputs
     }
 
@@ -87,30 +87,30 @@ impl InputBuffer {
             self.neutral = false;
         }
 
-        self.incr_frames(updated);
+        self.age(updated);
         self.inputs.clone()
     }
 
     fn push(&mut self, input: Input) {
-        if self.inputs.len() >= Inputs::CAP || self.frames > MAX_INTERVAL.as_actual() {
+        if self.inputs.len() >= Inputs::CAP || self.age > MAX_INTERVAL.as_actual() {
             self.inputs.clear();
         }
         self.inputs.push(input);
     }
 
-    fn incr_frames(&mut self, updated: bool) {
+    fn age(&mut self, updated: bool) {
         if updated {
-            self.frames = 0;
+            self.age = 0;
         } else {
-            self.frames = self.frames.saturating_add(1);
+            self.age = self.age.saturating_add(1);
         }
     }
 
     pub fn expired(&self) -> bool {
         if self.inputs.len() == 1 {
-            self.frames >= MAX_DELAY_FOR_SINGLE_INPUT.as_actual() && self.released()
+            self.age >= MAX_DELAY_FOR_SINGLE_INPUT.as_actual() && self.released()
         } else {
-            self.frames >= MAX_DELAY.as_actual()
+            self.age >= MAX_DELAY.as_actual()
         }
     }
 
@@ -120,7 +120,7 @@ impl InputBuffer {
 
     pub fn clear(&mut self) {
         self.inputs.clear();
-        self.frames = 0;
+        self.age = 0;
     }
 }
 

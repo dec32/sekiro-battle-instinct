@@ -2,11 +2,11 @@ use std::ffi::c_void;
 
 //----------------------------------------------------------------------------
 //
-//  Addresses of objects and functions from the original program
+//  Addresses of functions and objects from the original program
 //
 //----------------------------------------------------------------------------
 
-// fucntions
+// functions
 pub const PROCESS_INPUT: usize = 0x140B2C190;
 pub const GET_ITEM_NAME: usize = 0x1410AA340;
 pub const GET_ITEM_ID: usize = 0x140C3D680;
