@@ -63,7 +63,7 @@ pub struct Mod {
     injected_blocks: u8,
     disable_block: bool,
     prev_slot: Option<ProstheticSlot>,
-    ejected_tools: [Option<ItemID>; 3],
+    ejection: Option<(ItemID, ProstheticSlot)>,
     gamepad: Gamepad,
 }
 
@@ -83,7 +83,7 @@ impl Mod {
             injected_blocks: 0,
             disable_block: false,
             prev_slot: None,
-            ejected_tools: [None; 3],
+            ejection: None,
             gamepad: Gamepad::new(),
         }
     }
@@ -161,12 +161,9 @@ impl Mod {
                         activate_prosthetic_slot(prev_slot);
                     }
                 }
-                // also put the ejected tools back to their original slots
-                for (index, ejected_tool) in self.ejected_tools.iter_mut().enumerate() {
-                    let Some(ejected_tool) = ejected_tool.take() else {
-                        continue;
-                    };
-                    equip_prosthetic(ejected_tool, ProstheticSlot::from_prosthetic_index(index as u32));
+                // also put the ejected tool back to its original slot
+                if let Some((slot, tool)) = self.ejection.take() {
+                    equip_prosthetic(slot, tool);
                 }
                 tools
             } else {
@@ -187,8 +184,7 @@ impl Mod {
                 Some(tagret_slot) => tagret_slot,
                 None => {
                     // eject the tool in the active slot and revert it later
-                    let index = active_slot.as_prosthetic_index() as usize;
-                    self.ejected_tools[index] = self.ejected_tools[index].or(get_prosthetic_tool(active_slot));
+                    self.ejection = self.ejection.or(get_prosthetic_tool(active_slot).map(|tool|(tool, active_slot)));
                     // notice that equipping and slot switching can not happen within the same tick or the switching won't apply
                     for tool in desired_tools.iter().copied() {
                         if equip_prosthetic(tool, active_slot) {
@@ -522,15 +518,6 @@ impl ProstheticSlot {
     fn as_prosthetic_index(self) -> u32 {
         self as u32 / 2
     }
-    #[inline(always)]
-    fn from_prosthetic_index(prosthetic_index: u32) -> ProstheticSlot {
-        match prosthetic_index {
-            0 => ProstheticSlot::S0,
-            1 => ProstheticSlot::S1,
-            2 => ProstheticSlot::S2,
-            illegal_slot => unreachable!("Illegal prosthetic slot: {illegal_slot}")
-        }
-    }
 }
 
 fn set_combat_art(art: impl ID) -> bool {
@@ -562,7 +549,12 @@ fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
 
 fn get_active_prosthetic_slot() -> ProstheticSlot {
     let active_prosthetic = player_data().activte_prosthetic;
-    ProstheticSlot::from_prosthetic_index(active_prosthetic as u32)
+    match active_prosthetic {
+        0 => ProstheticSlot::S0,
+        1 => ProstheticSlot::S1,
+        2 => ProstheticSlot::S2,
+        illegal_slot => unreachable!("Illegal prosthetic slot: {illegal_slot}")
+    }
 }
 
 fn locate_prosthetic_tool(tool: impl ID) -> Option<ProstheticSlot> {
