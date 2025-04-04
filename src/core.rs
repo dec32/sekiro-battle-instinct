@@ -196,11 +196,17 @@ impl Mod {
             let target_slot = match target_slot {
                 Some(tagret_slot) => tagret_slot,
                 None => {
-                    // eject the tool in the active slot and revert it later
-                    self.ejection = self.ejection.or(get_prosthetic_tool(active_slot).map(|tool|(tool, active_slot)));
-                    // notice that equipping and slot switching can not happen within the same tick or the switching won't apply
+                    // replace the tool in the active slot and remembers the ejected one for later reverting
+                    // notice that only the first ever ejected tool is remembered because the latter ones 
+                    // are placed into the slot by the MOD but not the player. there's not point in maintaining them
+                    // the reason why the active slot instead of some dedicated slot is used is because
+                    // equipping and switching can not happen within the same tick or the switching won't apply
+                    let active_tool = get_prosthetic_tool(active_slot);
                     for tool in desired_tools.iter().copied() {
                         if equip_prosthetic(tool, active_slot) {
+                            if let Some(active_tool) = active_tool {
+                                self.ejection.get_or_insert((active_tool, active_slot));
+                            }
                             break;
                         }
                     }
@@ -211,6 +217,14 @@ impl Mod {
                 activate_prosthetic_slot(target_slot);
                 // remembers the previous slot and rollback to it later if there're not default tools configured
                 self.prev_slot = self.prev_slot.or(Some(active_slot));
+                // revert the ejected tool as soon as we move away from its original slot
+                // so that if any other tool needs to be ejected, it can be stored into `self.ejection`
+                if let Some((ejected_tool, original_slot)) = self.ejection {
+                    if target_slot != original_slot {
+                        equip_prosthetic(ejected_tool, original_slot);
+                        self.ejection = None;
+                    }
+                }
             }
             self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
         }
