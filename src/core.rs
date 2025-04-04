@@ -179,7 +179,20 @@ impl Mod {
             let target_slot = desired_tools.iter().copied()
                 .filter_map(locate_prosthetic_tool)
                 .next();
-            // if none equipped, simply use the first one (that is owned by the player) in the list
+            // if none equipped, check if the ejected tool is desired
+            let target_slot = target_slot.or_else(||{
+                self.ejection.and_then(|(ejected_tool, slot)|{
+                    for tool in desired_tools.iter().copied() {
+                        if tool.get_item_id() == Some(ejected_tool) {
+                            equip_prosthetic(ejected_tool, slot);
+                            self.ejection = None;
+                            return Some(slot);
+                        }
+                    }
+                    None
+                })
+            });
+            // use the first one (that is owned by the player) in the list as the last resort
             let target_slot = match target_slot {
                 Some(tagret_slot) => tagret_slot,
                 None => {
