@@ -179,7 +179,7 @@ impl Mod {
             let target_slot = desired_tools.iter().copied()
                 .filter_map(locate_prosthetic_tool)
                 .next();
-            // if none equipped, check if the ejected tool is desired
+            // if none equipped, check if the ejected one is desired
             let target_slot = target_slot.or_else(||{
                 self.ejection.and_then(|(ejected_tool, slot)|{
                     for tool in desired_tools.iter().copied() {
