@@ -162,8 +162,8 @@ impl Mod {
                     }
                 }
                 // also put the ejected tool back to its original slot
-                if let Some((slot, tool)) = self.ejection.take() {
-                    equip_prosthetic(slot, tool);
+                if let Some((ejected_tool, orignal_slot)) = self.ejection.take() {
+                    equip_prosthetic(ejected_tool, orignal_slot);
                 }
                 tools
             } else {
@@ -181,12 +181,12 @@ impl Mod {
                 .next();
             // if none equipped, check if the ejected one is desired
             let target_slot = target_slot.or_else(||{
-                self.ejection.and_then(|(ejected_tool, slot)|{
+                self.ejection.and_then(|(ejected_tool, original_slot)|{
                     for tool in desired_tools.iter().copied() {
                         if tool.get_item_id() == Some(ejected_tool) {
-                            equip_prosthetic(ejected_tool, slot);
+                            equip_prosthetic(ejected_tool, original_slot);
                             self.ejection = None;
-                            return Some(slot);
+                            return Some(original_slot);
                         }
                     }
                     None
@@ -197,8 +197,8 @@ impl Mod {
                 Some(tagret_slot) => tagret_slot,
                 None => {
                     // replace the tool in the active slot and remembers the ejected one for later reverting
-                    // notice that only the first ever ejected tool is remembered because the latter ones 
-                    // are placed into the slot by the MOD but not the player. there's not point in maintaining them
+                    // notice that only the first ever ejected tool is remembered because the latter ones are 
+                    // placed into the slot by the MOD but not the player. there's not point in rolling back to them
                     // the reason why the active slot instead of some dedicated slot is used is because
                     // equipping and switching can not happen within the same tick or the switching won't apply
                     let active_tool = get_prosthetic_tool(active_slot);
@@ -214,9 +214,6 @@ impl Mod {
                 }
             };
             if target_slot != active_slot {
-                activate_prosthetic_slot(target_slot);
-                // remembers the previous slot and rollback to it later if there're not default tools configured
-                self.prev_slot = self.prev_slot.or(Some(active_slot));
                 // revert the ejected tool as soon as we move away from its original slot
                 // so that if any other tool needs to be ejected, it can be stored into `self.ejection`
                 if let Some((ejected_tool, original_slot)) = self.ejection {
@@ -225,6 +222,9 @@ impl Mod {
                         self.ejection = None;
                     }
                 }
+                // remembers the active slot and rollback to it later if there're not default tools configured
+                self.prev_slot.get_or_insert(active_slot);
+                activate_prosthetic_slot(target_slot);
             }
             self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
         }
