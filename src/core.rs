@@ -62,8 +62,8 @@ pub struct Mod {
     prosthetic_delay: u8,
     injected_blocks: u8,
     disable_block: bool,
-    ejected_tool: Option<ItemID>,
     prev_slot: Option<ProstheticSlot>,
+    ejected_tools: [Option<ItemID>; 3],
     gamepad: Gamepad,
 }
 
@@ -82,8 +82,8 @@ impl Mod {
             prosthetic_delay: 0,
             injected_blocks: 0,
             disable_block: false,
-            ejected_tool: None,
             prev_slot: None,
+            ejected_tools: [None; 3],
             gamepad: Gamepad::new(),
         }
     }
@@ -161,11 +161,12 @@ impl Mod {
                         activate_prosthetic_slot(prev_slot);
                     }
                 }
-                // also put the ejected tool back to slot 0
-                if let Some(ejected_tool) = self.ejected_tool.take() {
-                    if get_prosthetic_tool(ProstheticSlot::S0) != Some(ejected_tool) {
-                        equip_prosthetic(ejected_tool, ProstheticSlot::S0);
-                    }
+                // also put the ejected tools back to their original slots
+                for (index, ejected_tool) in self.ejected_tools.iter_mut().enumerate() {
+                    let Some(ejected_tool) = ejected_tool.take() else {
+                        continue;
+                    };
+                    equip_prosthetic(ejected_tool, ProstheticSlot::from_prosthetic_index(index as u32));
                 }
                 tools
             } else {
@@ -185,14 +186,16 @@ impl Mod {
             let target_slot = match target_slot {
                 Some(tagret_slot) => tagret_slot,
                 None => {
-                    // eject the tool at the slot 0 and revert it later
-                    self.ejected_tool = self.ejected_tool.or(get_prosthetic_tool(ProstheticSlot::S0));
+                    // eject the tool in the active slot and revert it later
+                    let index = active_slot.as_prosthetic_index() as usize;
+                    self.ejected_tools[index] = self.ejected_tools[index].or(get_prosthetic_tool(active_slot));
+                    // notice that equipping and slot switching can not happen within the same tick or the switching won't apply
                     for tool in desired_tools.iter().copied() {
-                        if equip_prosthetic(tool, ProstheticSlot::S0) {
+                        if equip_prosthetic(tool, active_slot) {
                             break;
                         }
                     }
-                    ProstheticSlot::S0
+                    active_slot
                 }
             };
             if target_slot != active_slot {
@@ -512,12 +515,21 @@ enum ProstheticSlot {
 
 impl ProstheticSlot {
     #[inline(always)]
-    fn as_index(self) -> usize {
+    fn as_slot_index(self) -> usize {
         self as usize
     }
     #[inline(always)]
     fn as_prosthetic_index(self) -> u32 {
         self as u32 / 2
+    }
+    #[inline(always)]
+    fn from_prosthetic_index(prosthetic_index: u32) -> ProstheticSlot {
+        match prosthetic_index {
+            0 => ProstheticSlot::S0,
+            1 => ProstheticSlot::S1,
+            2 => ProstheticSlot::S2,
+            illegal_slot => unreachable!("Illegal prosthetic slot: {illegal_slot}")
+        }
     }
 }
 
@@ -526,7 +538,7 @@ fn set_combat_art(art: impl ID) -> bool {
 }
 
 fn equip_prosthetic(tool: impl ID, slot: ProstheticSlot) -> bool {
-    set_slot(tool, slot.as_index())
+    set_slot(tool, slot.as_slot_index())
 }
 
 fn set_slot(item: impl ID, slot_index: usize) -> bool {
@@ -540,7 +552,7 @@ fn set_slot(item: impl ID, slot_index: usize) -> bool {
 
 fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
     let items = &player_data().equiped_items;
-    let item_id = items[slot.as_index()];
+    let item_id = items[slot.as_slot_index()];
     if item_id != 256 {
         ItemID::new(item_id)
     } else {
@@ -550,13 +562,7 @@ fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
 
 fn get_active_prosthetic_slot() -> ProstheticSlot {
     let active_prosthetic = player_data().activte_prosthetic;
-    let active_slot = match active_prosthetic {
-        0 => ProstheticSlot::S0,
-        1 => ProstheticSlot::S1,
-        2 => ProstheticSlot::S2,
-        illegal_slot => unreachable!("Illegal active prosthetic slot: {illegal_slot}")
-    };
-    active_slot
+    ProstheticSlot::from_prosthetic_index(active_prosthetic as u32)
 }
 
 fn locate_prosthetic_tool(tool: impl ID) -> Option<ProstheticSlot> {
@@ -565,7 +571,7 @@ fn locate_prosthetic_tool(tool: impl ID) -> Option<ProstheticSlot> {
         return None
     };
     for slot in [ProstheticSlot::S0, ProstheticSlot::S1, ProstheticSlot::S2] {
-        if items[slot.as_index()] == item_id.get() {
+        if items[slot.as_slot_index()] == item_id.get() {
             return Some(slot);
         }
     }
