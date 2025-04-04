@@ -173,9 +173,17 @@ impl Mod {
         };
 
         /***** equip the desired prosthetic tool *****/ 
+        // revert the ejected tool as soon as we move away from its original slot
+        // so that if any other tool needs to be ejected, it can be stored into `self.ejection`
+        let active_slot = get_active_prosthetic_slot();
+        if let Some((ejected_tool, original_slot)) = self.ejection {
+            if active_slot != original_slot {
+                equip_prosthetic(ejected_tool, original_slot);
+                self.ejection = None;
+            }
+        }
         if !desired_tools.is_empty() {
             // when multiple tools are bind to the same inputs, use the already equiped one first
-            let active_slot = get_active_prosthetic_slot();
             let target_slot = desired_tools.iter().copied()
                 .filter_map(locate_prosthetic_tool)
                 .next();
@@ -214,14 +222,6 @@ impl Mod {
                 }
             };
             if target_slot != active_slot {
-                // revert the ejected tool as soon as we move away from its original slot
-                // so that if any other tool needs to be ejected, it can be stored into `self.ejection`
-                if let Some((ejected_tool, original_slot)) = self.ejection {
-                    if target_slot != original_slot {
-                        equip_prosthetic(ejected_tool, original_slot);
-                        self.ejection = None;
-                    }
-                }
                 // remembers the active slot and rollback to it later if there're not default tools configured
                 self.prev_slot.get_or_insert(active_slot);
                 activate_prosthetic_slot(target_slot);
