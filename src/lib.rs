@@ -140,6 +140,6 @@ fn _modify(path: PathBuf) -> Result<()> {
 fn process_input(input_handler: *mut game::InputHandler, arg: usize) -> usize {
     unsafe { FRAMERATE.tick(); }
     MOD.lock().unwrap().process_input(unsafe { input_handler.as_mut().expect("input_handler is null") });
-    let process_input_orig = PROCESS_INPUT_ORIG.get().cloned().unwrap();
+    let process_input_orig = PROCESS_INPUT_ORIG.get().copied().unwrap();
     process_input_orig(input_handler, arg)
 }

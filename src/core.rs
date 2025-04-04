@@ -63,6 +63,7 @@ pub struct Mod {
     injected_blocks: u8,
     disable_block: bool,
     ejected_tool: Option<ItemID>,
+    prev_slot: Option<ProstheticSlot>,
     gamepad: Gamepad,
 }
 
@@ -82,6 +83,7 @@ impl Mod {
             injected_blocks: 0,
             disable_block: false,
             ejected_tool: None,
+            prev_slot: None,
             gamepad: Gamepad::new(),
         }
     }
@@ -150,15 +152,22 @@ impl Mod {
             tools
         } else {
             // equip the default tool as soon as it's availble
-            // so that the rollback is reflected on the Prosthetic slot immediately
             if self.rollback_countdown.done() {
+                let tools = self.config.tools.get_or_default([]);
+                // it's possible that the player does not have any default tool configured
+                // in this case we need to rollback to the previous slot instead of the default tool
+                if tools.is_empty() {
+                    if let Some(prev_slot) = self.prev_slot.take() {
+                        activate_prosthetic_slot(prev_slot);
+                    }
+                }
                 // also put the ejected tool back to slot 0
                 if let Some(ejected_tool) = self.ejected_tool.take() {
                     if get_prosthetic_tool(ProstheticSlot::S0) != Some(ejected_tool) {
                         equip_prosthetic(ejected_tool, ProstheticSlot::S0);
                     }
                 }
-                self.config.tools.get_or_default([])
+                tools
             } else {
                 self.rollback_countdown.count_on(!using_tool);
                 &[]
@@ -169,7 +178,7 @@ impl Mod {
         if !desired_tools.is_empty() {
             // when multiple tools are bind to the same inputs, use the already equiped one first
             let active_slot = get_active_prosthetic_slot();
-            let target_slot = desired_tools.iter().cloned()
+            let target_slot = desired_tools.iter().copied()
                 .filter_map(locate_prosthetic_tool)
                 .next();
             // if none equipped, simply use the first one (that is owned by the player) in the list
@@ -178,7 +187,7 @@ impl Mod {
                 None => {
                     // eject the tool at the slot 0 and revert it later
                     self.ejected_tool = self.ejected_tool.or(get_prosthetic_tool(ProstheticSlot::S0));
-                    for tool in desired_tools.iter().cloned() {
+                    for tool in desired_tools.iter().copied() {
                         if equip_prosthetic(tool, ProstheticSlot::S0) {
                             break;
                         }
@@ -188,6 +197,8 @@ impl Mod {
             };
             if target_slot != active_slot {
                 activate_prosthetic_slot(target_slot);
+                // remembers the previous slot and rollback to it later if there're not default tools configured
+                self.prev_slot = self.prev_slot.or(Some(active_slot));
             }
             self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
         }

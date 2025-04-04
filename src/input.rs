@@ -359,7 +359,7 @@ impl<T:Copy> InputsTrie<T> {
     pub fn iter(&self) -> impl Iterator<Item = (Inputs, T)> {
         self.array
             .iter()
-            .cloned()
+            .copied()
             .enumerate()
             .filter_map(|(hash, value)|Some((Inputs::from_perfect_hash(hash), value?)))
     }
