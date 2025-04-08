@@ -138,12 +138,12 @@ pub enum Input {
 impl Input {
     #[inline(always)]
     pub fn opposite(self) -> Input {
-        Input::from_repr((self as u8 + 2) % 4)
+        Input::from_repr((self.as_repr() + 2) % 4)
     }
 
     #[inline(always)]
     pub fn rotate(self) -> Input {
-        Input::from_repr((self as u8 + 1) % 4)
+        Input::from_repr((self.as_repr() + 1) % 4)
     }
 
     #[inline(always)]
@@ -155,13 +155,8 @@ impl Input {
     }
 
     #[inline(always)]
-    fn from_one_based(value: u8) -> Input {
-        Input::from_repr(value - 1)
-    }
-
-    #[inline(always)]
-    fn as_one_based(self) -> u8 {
-        self as u8 + 1
+    fn as_repr(self) -> u8 {
+        self as u8
     }
 }
 
@@ -196,58 +191,63 @@ impl Debug for Input {
 //
 //----------------------------------------------------------------------------
 
-// todo: apparently it dosn't need to derive Hash
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Inputs {
-    hash: u8,
-    len: u8,
+    // the bit-wise content of `value` follows the pattern
+    // [inputs[0], inputs[1], inputs[2], len]
+    // the possible values for inputs[n] and len are both 0, 1, 2, 3
+    // thus each of the values takes exactly 2 bits of space
+    // making 4 of them to fit into an 8-bit integer
+    value: u8,
 }
 
 impl Inputs {
     const CAP: u8 = 3;
-    const BASE: u8 = 5;
-    const MAX_HASHCODE: usize = (Self::BASE.pow(Self::CAP as u32) - 1) as usize;
-
+    const MAX_HASHCODE: usize = 0b11111111;
+    
     #[inline(always)]
     pub const fn new() -> Inputs {
-        Inputs { hash: 0, len: 0 }
+        Inputs { value: 0 }
     }
 
     #[inline(always)]
-    pub fn from_perfect_hash(hash: usize) -> Inputs {
-        if hash > Self::MAX_HASHCODE {
-            panic!("Illegal hash code {hash} for inputs.");
-        }
-        let hash = hash as u8;
-
-        let mut len = 0;
-        let mut tmp = hash;
-        loop {
-            if tmp == 0 {
-                break;
-            }
-            len += 1;
-            tmp /= Self::BASE;
-        }
-        Inputs { hash, len }
+    pub fn from_perfect_hash(perfect_hash: usize) -> Inputs {
+        Inputs { value: perfect_hash as u8 }
     }
 
     #[inline(always)]
-    pub fn push(&mut self, input: Input) {
-        self.hash *= Self::BASE;
-        self.hash += input.as_one_based();
-        self.len += 1;
+    pub fn push(&mut self, input: Input) -> bool {
+        let len = self.len();
+        if len == Inputs::CAP {
+            false
+        } else {
+            self.value += input.as_repr() << ((Inputs::CAP - len) * 2);
+            self.value += 1;
+            true
+        }
     }
 
     #[inline(always)]
     pub fn pop(&mut self) -> Option<Input> {
-        let remainder = self.hash % Self::BASE;
-        if remainder == 0 {
+        let len = self.len();
+        if len == 0 {
             None
         } else {
-            self.hash /= Self::BASE;
-            self.len -= 1;
-            Some(Input::from_one_based(remainder))
+            let shift = (Inputs::CAP + 1 - len) * 2;
+            let last = self.value >> shift & 0b11;
+            self.value &= !(0b11 << shift);
+            self.value -= 1;
+            Some(Input::from_repr(last))
+        }
+    }
+
+    #[inline(always)]
+    pub fn last(self) -> Option<Input> {
+        let len = self.len();
+        if len == 0 {
+            None
+        } else {
+            Some(Input::from_repr(self.value >> ((Inputs::CAP + 1 - len) * 2) & 0b11))
         }
     }
 
@@ -259,36 +259,25 @@ impl Inputs {
        }
        rev
     }
- 
-    #[inline(always)]
-    pub fn last(self) -> Option<Input> {
-        let last_digit = self.hash % Self::BASE;
-        if last_digit == 0 {
-            None
-        } else {
-            Some(Input::from_one_based(last_digit))
-        }
-    }
 
     #[inline(always)]
     pub fn clear(&mut self) {
-        self.hash = 0;
-        self.len = 0;
+        self.value = 0;
     }
 
     #[inline(always)]
     pub fn len(self) -> u8 {
-        self.len
+        self.value & 0b11
     }
 
     #[inline(always)]
     pub fn perfect_hash(self) -> usize {
-        self.hash as usize
+        self.value as usize
     }
 
     #[inline(always)]
     pub fn meant_for_art(self) -> bool {
-        self.len >= 2
+        self.len() >= 2
     }
 }
 
@@ -299,9 +288,18 @@ impl FromIterator<Input> for Inputs {
         let mut inputs = Inputs::new();
         let mut iter = iter.into_iter();
         while let Some(input) = iter.next() {
-            inputs.push(input);
+            if !inputs.push(input) {
+                panic!("Number of inputs exceeds capacity.")
+            }
         }
         inputs
+    }
+}
+
+impl From<&[Input]> for Inputs {
+    #[inline(always)]
+    fn from(array: &[Input]) -> Self {
+        Inputs::from_iter(array.iter().copied())
     }
 }
 
@@ -381,22 +379,85 @@ where T: Debug + Copy
 
 #[test]
 fn test_inputs() {
-    fn assert_hash(inputs: impl Into<Inputs>, hashcode: &str) {
-        let hashcode = u8::from_str_radix(hashcode, 5).unwrap();
-        assert_eq!(inputs.into().hash, hashcode)
+    macro_rules! assert_len {
+        ($inputs:expr, $len:expr) => {
+            assert_eq!(Inputs::from($inputs).len(), $len);
+        };
     }
 
-    assert_hash([Up], "1");
-    assert_hash([Right], "2");
-    assert_hash([Down], "3");
-    assert_hash([Left], "4");
-    assert_hash([Up, Up], "11");
-    assert_hash([Up, Right], "12");
-    assert_hash([Up, Right, Down], "123");
-    assert_hash([Left, Left, Left], "444");
+    macro_rules! assert_value {
+        ($inputs:expr, $value:expr) => {
+            assert_eq!(Inputs::from($inputs).value, u8::from_str_radix($value, 4).unwrap());
+        }
+    }
 
-    assert_eq!(Inputs::from([]).len(), 0);
-    assert_eq!(Inputs::from([Up]).len(), 1);
-    assert_eq!(Inputs::from([Up, Right]).len(), 2);
-    assert_eq!(Inputs::from([Up, Right, Down]).len(), 3);
+    // len
+    assert_len!([], 0);
+    assert_len!([Up], 1);
+    assert_len!([Up, Right], 2);
+    assert_len!([Up, Right, Down], 3);
+
+    // hash
+    assert_value!([], "0000");
+    assert_value!([Up], "0001");
+    assert_value!([Right], "1001");
+    assert_value!([Down], "2001");
+    assert_value!([Left], "3001");
+    assert_value!([Up, Up], "0002");
+    assert_value!([Up, Right], "0102");
+    assert_value!([Up, Right, Down], "0123");
+    assert_value!([Left, Left, Left], "3333");
+
+    // push and pop
+    let src = [Up, Right, Down];
+    let rev = [Down, Right, Up];
+
+    let mut inputs = Inputs::new();
+    for (i, input) in src.iter().copied().enumerate() {
+        assert!(inputs.push(input));
+        assert_eq!(inputs, Inputs::from(&src[..i+1]));
+    }
+    assert_eq!(inputs.push(Left), false);
+
+    for last in rev {
+        assert_eq!(inputs.last(), Some(last));
+        assert_eq!(inputs.pop(), Some(last));
+    }
+    assert_eq!(inputs.last(), None);
+    assert_eq!(inputs.pop(), None);
+
+    // rev
+    assert_eq!(Inputs::from([Up]).rev(), Inputs::from([Up]));
+    assert_eq!(Inputs::from([Up, Right]).rev(), Inputs::from([Right, Up]));
+    assert_eq!(Inputs::from([Up, Right, Down]).rev(), Inputs::from([Down, Right, Up]));
+
+
+}
+
+#[test]
+fn bench_inputs() {
+    const ROUNDS: usize = 1_000_000;
+    macro_rules! push_and_pop {
+        ($target:ident) => {
+            {
+                let start = std::time::Instant::now();
+                let src = [Up, Right, Down, Left];
+                for _ in 0..ROUNDS {
+                    for input in src {
+                        $target.push(input);
+                    }
+                    for _ in src {
+                        $target.pop();
+                    }
+                }
+                start.elapsed()
+            }
+        };
+    }
+    
+    let mut inputs = Inputs::new();
+    let mut vec = Vec::with_capacity(Inputs::CAP as usize);
+
+    println!("Inputs:     {:?}", push_and_pop!(inputs));
+    println!("Vec<Input>: {:?}", push_and_pop!(vec));
 }
