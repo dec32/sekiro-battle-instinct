@@ -377,87 +377,90 @@ where T: Debug + Copy
     }
 }
 
-#[test]
-fn test_inputs() {
-    macro_rules! assert_len {
-        ($inputs:expr, $len:expr) => {
-            assert_eq!(Inputs::from($inputs).len(), $len);
-        };
-    }
 
-    macro_rules! assert_value {
-        ($inputs:expr, $value:expr) => {
-            assert_eq!(Inputs::from($inputs).value, u8::from_str_radix($value, 4).unwrap());
+#[cfg(test)]
+mod test {
+    use crate::input::{Input::*, Inputs};
+    #[test]
+    fn test_inputs() {
+        macro_rules! assert_len {
+            ($inputs:expr, $len:expr) => {
+                assert_eq!(Inputs::from($inputs).len(), $len);
+            };
         }
-    }
-
-    // len
-    assert_len!([], 0);
-    assert_len!([Up], 1);
-    assert_len!([Up, Right], 2);
-    assert_len!([Up, Right, Down], 3);
-
-    // hash
-    assert_value!([], "0000");
-    assert_value!([Up], "0001");
-    assert_value!([Right], "1001");
-    assert_value!([Down], "2001");
-    assert_value!([Left], "3001");
-    assert_value!([Up, Up], "0002");
-    assert_value!([Up, Right], "0102");
-    assert_value!([Up, Right, Down], "0123");
-    assert_value!([Left, Left, Left], "3333");
-
-    // push and pop
-    let src = [Up, Right, Down];
-    let rev = [Down, Right, Up];
-
-    let mut inputs = Inputs::new();
-    for (i, input) in src.iter().copied().enumerate() {
-        assert!(inputs.push(input));
-        assert_eq!(inputs, Inputs::from(&src[..i+1]));
-    }
-    assert_eq!(inputs.push(Left), false);
-
-    for last in rev {
-        assert_eq!(inputs.last(), Some(last));
-        assert_eq!(inputs.pop(), Some(last));
-    }
-    assert_eq!(inputs.last(), None);
-    assert_eq!(inputs.pop(), None);
-
-    // rev
-    assert_eq!(Inputs::from([Up]).rev(), Inputs::from([Up]));
-    assert_eq!(Inputs::from([Up, Right]).rev(), Inputs::from([Right, Up]));
-    assert_eq!(Inputs::from([Up, Right, Down]).rev(), Inputs::from([Down, Right, Up]));
-
-
-}
-
-#[test]
-fn bench_inputs() {
-    const ROUNDS: usize = 1_000_000;
-    macro_rules! push_and_pop {
-        ($target:ident) => {
-            {
-                let start = std::time::Instant::now();
-                let src = [Up, Right, Down, Left];
-                for _ in 0..ROUNDS {
-                    for input in src {
-                        $target.push(input);
-                    }
-                    for _ in src {
-                        $target.pop();
-                    }
-                }
-                start.elapsed()
+    
+        macro_rules! assert_value {
+            ($inputs:expr, $value:expr) => {
+                assert_eq!(Inputs::from($inputs).value, u8::from_str_radix($value, 4).unwrap());
             }
-        };
+        }
+    
+        // len
+        assert_len!([], 0);
+        assert_len!([Up], 1);
+        assert_len!([Up, Right], 2);
+        assert_len!([Up, Right, Down], 3);
+    
+        // hash
+        assert_value!([], "0000");
+        assert_value!([Up], "0001");
+        assert_value!([Right], "1001");
+        assert_value!([Down], "2001");
+        assert_value!([Left], "3001");
+        assert_value!([Up, Up], "0002");
+        assert_value!([Up, Right], "0102");
+        assert_value!([Up, Right, Down], "0123");
+        assert_value!([Left, Left, Left], "3333");
+    
+        // push and pop
+        let src = [Up, Right, Down];
+        let rev = [Down, Right, Up];
+    
+        let mut inputs = Inputs::new();
+        for (i, input) in src.iter().copied().enumerate() {
+            assert!(inputs.push(input));
+            assert_eq!(inputs, Inputs::from(&src[..i+1]));
+        }
+        assert_eq!(inputs.push(Left), false);
+    
+        for last in rev {
+            assert_eq!(inputs.last(), Some(last));
+            assert_eq!(inputs.pop(), Some(last));
+        }
+        assert_eq!(inputs.last(), None);
+        assert_eq!(inputs.pop(), None);
+    
+        // rev
+        assert_eq!(Inputs::from([Up]).rev(), Inputs::from([Up]));
+        assert_eq!(Inputs::from([Up, Right]).rev(), Inputs::from([Right, Up]));
+        assert_eq!(Inputs::from([Up, Right, Down]).rev(), Inputs::from([Down, Right, Up]));
     }
     
-    let mut inputs = Inputs::new();
-    let mut vec = Vec::with_capacity(Inputs::CAP as usize);
-
-    println!("Inputs:     {:?}", push_and_pop!(inputs));
-    println!("Vec<Input>: {:?}", push_and_pop!(vec));
+    #[test]
+    fn bench_inputs() {
+        const ROUNDS: usize = 1_000_000;
+        macro_rules! push_and_pop {
+            ($target:ident) => {
+                {
+                    let start = std::time::Instant::now();
+                    let src = [Up, Right, Down, Left];
+                    for _ in 0..ROUNDS {
+                        for input in src {
+                            $target.push(input);
+                        }
+                        for _ in src {
+                            $target.pop();
+                        }
+                    }
+                    start.elapsed()
+                }
+            };
+        }
+        
+        let mut inputs = Inputs::new();
+        let mut vec = Vec::with_capacity(Inputs::CAP as usize);
+    
+        println!("Inputs:     {:?}", push_and_pop!(inputs));
+        println!("Vec<Input>: {:?}", push_and_pop!(vec));
+    }
 }

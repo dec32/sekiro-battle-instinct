@@ -165,25 +165,32 @@ fn get_item_name(uid: UID) -> Option<String> {
     }
 }
 
-#[test]
-fn test_load() {
-    let raw = "
-        # this is a line of comment
-        7100  Ichimonji: Double           ∅  # comment
-        70000 Loaded Shuriken             ∅  # comment
-        70100 Spinnging Shuriken          ∅  # comment
-        5600  Floating Passage           ←→  # comment
-        7200  Spiral Clound Passage      →←  # comment
-        74000 Mist Raven                 ←→  # comment
-        ";
-    let config = Config::from(raw);
 
-    assert_eq!(config.arts.get([]), Some(7100));
-    assert_eq!(config.tools.get_or_default([]), [70000, 70100]);
-
-    assert_eq!(config.arts.get([Left, Right]), Some(5600));
-    assert_eq!(config.arts.get([Right, Left]), Some(7200));
-
-    assert_eq!(config.tools.get_or_default([Left, Right]), &[74000]);
-    assert_eq!(config.tools.get_or_default([Right, Left]), &[74000]);
+#[cfg(test)]
+mod test {
+    use crate::{config::Config, input::Input::*};
+    
+    #[test]
+    fn test_load() {
+        let raw = "
+            # this is a line of comment
+            7100  Ichimonji: Double           ∅  # comment
+            70000 Loaded Shuriken             ∅  # comment
+            70100 Spinnging Shuriken          ∅  # comment
+            5600  Floating Passage           ←→  # comment
+            7200  Spiral Clound Passage      →←  # comment
+            74000 Mist Raven                 ←→  # comment
+            ";
+        let config = Config::from(raw);
+    
+        assert_eq!(config.arts.get([]), Some(7100));
+        assert_eq!(config.tools.get_or_default([]), [70000, 70100]);
+    
+        assert_eq!(config.arts.get([Left, Right]), Some(5600));
+        assert_eq!(config.arts.get([Right, Left]), Some(7200));
+    
+        assert_eq!(config.tools.get_or_default([Left, Right]), &[74000]);
+        assert_eq!(config.tools.get_or_default([Right, Left]), &[74000]);
+    }
+    
 }
