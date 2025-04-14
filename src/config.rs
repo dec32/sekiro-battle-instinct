@@ -129,15 +129,15 @@ fn possible_altenrnatives(mut inputs: Inputs) -> Vec<Inputs> {
         // example: if ←→ is used while →← is not, treat →← as ←→ so that players can press A and D at the same time
         let mut possible_inputs = Vec::new();
         possible_inputs.push(inputs.rev());
-        let a = inputs.pop().unwrap();
-        let b = inputs.pop().unwrap();
-        if a == b {
+        let tail = inputs.pop().unwrap();
+        let head = inputs.pop().unwrap();
+        if tail == head {
             // button smash
-            possible_inputs.push(Inputs::from([a, a, a]));
-        } else if a == b.opposite() {
+            possible_inputs.push(Inputs::from([tail, tail, tail]));
+        } else if tail == head.opposite() {
             // semicircle, for gamepads
-            possible_inputs.push(Inputs::from([a, a.rotate(), b]));
-            possible_inputs.push(Inputs::from([a, b.rotate(), b]));
+            possible_inputs.push(Inputs::from([head, tail.rotate(), tail]));
+            possible_inputs.push(Inputs::from([head, head.rotate(), tail]));
         }
         possible_inputs
     } else if inputs == [Left, Down, Right].into() {
@@ -182,15 +182,19 @@ mod test {
             74000 Mist Raven                 ←→  # comment
             ";
         let config = Config::from(raw);
-    
+        // default
         assert_eq!(config.arts.get([]), Some(7100));
         assert_eq!(config.tools.get_or_default([]), [70000, 70100]);
-    
+        // inputs
         assert_eq!(config.arts.get([Left, Right]), Some(5600));
         assert_eq!(config.arts.get([Right, Left]), Some(7200));
-    
+        // rev tolerance
         assert_eq!(config.tools.get_or_default([Left, Right]), &[74000]);
         assert_eq!(config.tools.get_or_default([Right, Left]), &[74000]);
+        // semicircle tolerance
+        assert_eq!(config.arts.get([Left, Down, Right]), Some(5600));
+        assert_eq!(config.arts.get([Right, Down, Left]), Some(7200));
+        
     }
     
 }
