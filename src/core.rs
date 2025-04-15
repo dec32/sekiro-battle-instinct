@@ -150,26 +150,25 @@ impl Mod {
                 tools = self.config.tools.get_or_default(inputs);
             }
             tools
-        } else {
+        } else if self.rollback_countdown.is_done() {
             // equip the default tool as soon as it's availble
-            if self.rollback_countdown.done() {
-                let tools = self.config.tools.get_or_default([]);
-                // it's possible that the player does not have any default tool configured
+            let tools = self.config.tools.get_or_default([]);
+            if tools.is_empty() {
+                // notice that it's possible that the player does not have any default tool configured
                 // in this case we need to rollback to the previous slot instead of the default tool
-                if tools.is_empty() {
-                    if let Some(prev_slot) = self.prev_slot.take() {
-                        activate_prosthetic_slot(prev_slot);
-                    }
+                if let Some(prev_slot) = self.prev_slot.take() {
+                    activate_prosthetic_slot(prev_slot);
                 }
-                // also put the ejected tool back to its original slot
+                // the equipping code already handles the revert of ejected tools properly when there're default 
+                // tools configured. revert at rollback is only for when there's no default tool configured
                 if let Some((ejected_tool, orignal_slot)) = self.ejection.take() {
                     equip_prosthetic(ejected_tool, orignal_slot);
-                }
-                tools
-            } else {
-                self.rollback_countdown.count_on(!using_tool);
-                &[]
+                } 
             }
+            tools
+        } else {
+            self.rollback_countdown.count_on(!using_tool);
+            &[]
         };
 
         /***** equip the desired prosthetic tool *****/ 
@@ -183,32 +182,40 @@ impl Mod {
             }
         }
         if !desired_tools.is_empty() {
-            // when multiple tools are bind to the same inputs, use the already equiped one first
-            let target_slot = desired_tools.iter().copied()
-                .filter_map(locate_prosthetic_tool)
-                .next();
-            // if none equipped, check if the ejected one is desired
-            let target_slot = target_slot.or_else(||{
-                self.ejection.and_then(|(ejected_tool, original_slot)|{
+            if let Some(target_slot) = desired_tools.iter().copied().filter_map(locate_prosthetic_tool).next() {
+                // when multiple tools are bind to the same inputs, use the already equiped one first
+                if target_slot != active_slot {
+                    // remembers the active slot and rollback to it later if there're not default tools configured
+                    self.prev_slot.get_or_insert(active_slot);
+                    activate_prosthetic_slot(target_slot);
+                }
+            } else {
+                // if none equipped, check if the ejected one is desired
+                let mut equipped = false;
+                if let Some((ejected_tool, original_slot)) = self.ejection {
                     for tool in desired_tools.iter().copied() {
                         if tool.get_item_id() == Some(ejected_tool) {
                             equip_prosthetic(ejected_tool, original_slot);
+                            equipped = true;
                             self.ejection = None;
-                            return Some(original_slot);
+                            break;
                         }
                     }
-                    None
-                })
-            });
-            // use the first one (that is owned by the player) in the list as the last resort
-            let target_slot = match target_slot {
-                Some(tagret_slot) => tagret_slot,
-                None => {
-                    // replace the tool in the active slot and remembers the ejected one for later reverting
+                }
+                // use the first one (that is owned by the player) in the list as the last resort
+                if !equipped {
+                    // replace the tool in the active slot and remembers the ejected one for later revert
                     // notice that only the first ever ejected tool is remembered because the latter ones are 
-                    // placed into the slot by the MOD but not the player. there's not point in rolling back to them
-                    // the reason why the active slot instead of some dedicated slot is used is because
-                    // equipping and switching can not happen within the same tick or the switching won't apply
+                    // placed into the slot by the MOD but not the player. there's not point in reverting them
+                    //
+                    // placing the desired tool into some dedicated slot and activating that slot later can cause bugs.
+                    // that is because `equip_prosthetic` must happen AFTER `activate_prosthetic_slot` when they occur 
+                    // within the same tick. activating the dedicated slot BEFORE placing any tool into it solves
+                    // this problem of course but now it triggers a disgusting flickering in the slot UI instead
+                    //
+                    // bugs and disgust are both unacceptable. that's why the code chooses a more complex approach:
+                    // placing tools into arbitrary active slots (thus `activate_prosthetic_slot` is no longer needed)
+                    // and keep track of the arbitrary `self.prev_slot`s and the original slots of `self.ejection`
                     let active_tool = get_prosthetic_tool(active_slot);
                     for tool in desired_tools.iter().copied() {
                         if equip_prosthetic(tool, active_slot) {
@@ -218,13 +225,7 @@ impl Mod {
                             break;
                         }
                     }
-                    active_slot
                 }
-            };
-            if target_slot != active_slot {
-                // remembers the active slot and rollback to it later if there're not default tools configured
-                self.prev_slot.get_or_insert(active_slot);
-                activate_prosthetic_slot(target_slot);
             }
             self.prosthetic_delay = PROSTHETIC_SUPRESSION_DURATION;
         }
@@ -232,7 +233,7 @@ impl Mod {
         /***** query the desired combat art *****/
         let mut performed_block_free_art_just_now = false;
         let performed_art_just_now = blocking && attacked_just_now;
-        let desired_art = if !self.swapout_countdown.done() {
+        let desired_art = if !self.swapout_countdown.is_done() {
             // fix buggy behavior of sakura dacne, ashina cross and one mind
             // One Mind has two windows for animation bugs to happen
             // one after pressing ATTACK (sheathing) and one after releasing ATTACK (drawing)
@@ -266,7 +267,7 @@ impl Mod {
 
         // if combat art switching happens too quick after performing certain combat arts
         // animation of other unrelated combat arts can be triggered
-        if performed_art_just_now || performed_block_free_art_just_now && self.swapout_countdown.done() {
+        if performed_art_just_now || performed_block_free_art_just_now && self.swapout_countdown.is_done() {
             self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown())
         }
 
@@ -414,7 +415,7 @@ impl Countdown {
         }
     }
 
-    fn done(&self) -> bool {
+    fn is_done(&self) -> bool {
         self.value == 0
     }
 }
