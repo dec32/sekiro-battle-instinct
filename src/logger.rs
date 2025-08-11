@@ -1,7 +1,13 @@
-use std::{env, fs::{self}, os::windows::fs::MetadataExt, path::PathBuf};
+use std::{
+    env,
+    fs::{self},
+    os::windows::fs::MetadataExt,
+    path::PathBuf,
+};
+
+use anyhow::Result;
 use chrono::Local;
 use log::{self, Level, LevelFilter::*};
-use anyhow::Result;
 
 #[cfg(debug_assertions)]
 const RELEASE: bool = false;
@@ -29,7 +35,7 @@ pub fn setup() -> Result<()> {
         .level(if RELEASE { Warn } else { Debug })
         .chain(fern::log_file(path)?)
         .apply()?;
-    std::panic::set_hook(Box::new(|info|log::error!("{info}")));
+    std::panic::set_hook(Box::new(|info| log::error!("{info}")));
     Ok(())
 }
 
@@ -41,8 +47,8 @@ impl LevelExt for Level {
     fn abbr(self) -> &'static str {
         match self {
             Level::Error => "ERR",
-            Level::Warn  => "WRN",
-            Level::Info  => "INF",
+            Level::Warn => "WRN",
+            Level::Info => "INF",
             Level::Debug => "DBG",
             Level::Trace => "TRC",
         }

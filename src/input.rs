@@ -1,5 +1,7 @@
 use std::fmt::Debug;
+
 use Input::*;
+
 use crate::frame::Frames;
 
 // buffer behavior
@@ -12,13 +14,12 @@ const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
 const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
 const MAX_DISTANCE: u16 = i16::MAX as u16;
 
-
 //----------------------------------------------------------------------------
 //
 //  An input buffer that remembers the most recent 3 motion inputs
 //  The buffer expires after several frames unless new inputs are pushed into it and reset its age
 //
-//---------------------------------------------------------------------------- 
+//----------------------------------------------------------------------------
 pub struct InputBuffer {
     inputs: Inputs,
     age: u16,
@@ -38,7 +39,10 @@ impl InputBuffer {
 
     pub fn update_keys(&mut self, up: bool, right: bool, down: bool, left: bool) -> Inputs {
         let mut updated = false;
-        for (i, (down, input)) in [(up, Up), (right, Right), (down, Down), (left, Left)].into_iter().enumerate() {
+        for (i, (down, input)) in [(up, Up), (right, Right), (down, Down), (left, Left)]
+            .into_iter()
+            .enumerate()
+        {
             if !self.keys_down[i] && down {
                 // newly pressed key
                 self.push(input);
@@ -58,7 +62,7 @@ impl InputBuffer {
         let input = if y_abs >= x_abs {
             if y > 0 { Up } else { Down }
         } else {
-            if x > 0 { Right } else { Left } 
+            if x > 0 { Right } else { Left }
         };
 
         // using chebyshev distance means we have a square-shaped neutral zone
@@ -80,7 +84,7 @@ impl InputBuffer {
         if distance < threshold {
             self.neutral = true;
         } else {
-            if self.neutral || self.inputs.last().into_iter().any(|last|input != last) {
+            if self.neutral || self.inputs.last().into_iter().any(|last| input != last) {
                 self.push(input);
                 updated = true;
             }
@@ -124,7 +128,6 @@ impl InputBuffer {
     }
 }
 
-
 //----------------------------------------------------------------------------
 //
 //  The input enum.
@@ -132,7 +135,10 @@ impl InputBuffer {
 //----------------------------------------------------------------------------
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Input {
-    Up = 0, Right = 1, Down = 2, Left = 3,
+    Up = 0,
+    Right = 1,
+    Down = 2,
+    Left = 3,
 }
 
 impl Input {
@@ -149,8 +155,11 @@ impl Input {
     #[inline(always)]
     fn from_repr(repr: u8) -> Input {
         match repr {
-            0 => Up, 1 => Right, 2 => Down, 3 => Left,
-            _ => panic!("Illegal representation {repr}.")
+            0 => Up,
+            1 => Right,
+            2 => Down,
+            3 => Left,
+            _ => panic!("Illegal representation {repr}."),
         }
     }
 
@@ -161,13 +170,13 @@ impl Input {
 }
 
 impl TryFrom<char> for Input {
-    type Error= ();
+    type Error = ();
     fn try_from(value: char) -> Result<Self, Self::Error> {
         match value.to_ascii_uppercase() {
-            '↑'|'U' => Ok(Up),
-            '→'|'R' => Ok(Right),
-            '↓'|'D' => Ok(Down),
-            '←'|'L' => Ok(Left),
+            '↑' | 'U' => Ok(Up),
+            '→' | 'R' => Ok(Right),
+            '↓' | 'D' => Ok(Down),
+            '←' | 'L' => Ok(Left),
             _ => Err(()),
         }
     }
@@ -176,10 +185,10 @@ impl TryFrom<char> for Input {
 impl Debug for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Up =>    write!(f, "↑"),
+            Self::Up => write!(f, "↑"),
             Self::Right => write!(f, "→"),
-            Self::Down =>  write!(f, "↓"),
-            Self::Left =>  write!(f, "←"),
+            Self::Down => write!(f, "↓"),
+            Self::Left => write!(f, "←"),
         }
     }
 }
@@ -204,7 +213,7 @@ pub struct Inputs {
 impl Inputs {
     const CAP: u8 = 3;
     const MAX_HASHCODE: usize = 0b11111111;
-    
+
     #[inline(always)]
     pub const fn new() -> Inputs {
         Inputs { value: 0 }
@@ -212,7 +221,9 @@ impl Inputs {
 
     #[inline(always)]
     pub fn from_perfect_hash(perfect_hash: usize) -> Inputs {
-        Inputs { value: perfect_hash as u8 }
+        Inputs {
+            value: perfect_hash as u8,
+        }
     }
 
     #[inline(always)]
@@ -253,11 +264,11 @@ impl Inputs {
 
     #[inline(always)]
     pub fn rev(mut self) -> Inputs {
-       let mut rev = Inputs::new();
-       while let Some(input) = self.pop() {
+        let mut rev = Inputs::new();
+        while let Some(input) = self.pop() {
             rev.push(input);
-       }
-       rev
+        }
+        rev
     }
 
     #[inline(always)]
@@ -281,7 +292,6 @@ impl Inputs {
     }
 }
 
-
 impl FromIterator<Input> for Inputs {
     #[inline(always)]
     fn from_iter<T: IntoIterator<Item = Input>>(iter: T) -> Self {
@@ -303,9 +313,9 @@ impl From<&[Input]> for Inputs {
     }
 }
 
-impl<const N:usize> From<[Input;N]> for Inputs {
+impl<const N: usize> From<[Input; N]> for Inputs {
     #[inline(always)]
-    fn from(array: [Input;N]) -> Self {
+    fn from(array: [Input; N]) -> Self {
         Inputs::from_iter(array.into_iter())
     }
 }
@@ -332,13 +342,13 @@ impl Debug for Inputs {
 //
 //----------------------------------------------------------------------------
 pub struct InputsTrie<T> {
-    array: [Option<T>; Inputs::MAX_HASHCODE + 1]
+    array: [Option<T>; Inputs::MAX_HASHCODE + 1],
 }
 
-impl<T:Copy> InputsTrie<T> {
+impl<T: Copy> InputsTrie<T> {
     pub const fn new() -> InputsTrie<T> {
         InputsTrie {
-            array: [None; Inputs::MAX_HASHCODE + 1]
+            array: [None; Inputs::MAX_HASHCODE + 1],
         }
     }
 
@@ -359,7 +369,7 @@ impl<T:Copy> InputsTrie<T> {
             .iter()
             .copied()
             .enumerate()
-            .filter_map(|(hash, value)|Some((Inputs::from_perfect_hash(hash), value?)))
+            .filter_map(|(hash, value)| Some((Inputs::from_perfect_hash(hash), value?)))
     }
 }
 
@@ -370,13 +380,13 @@ impl<T: Default + Copy> InputsTrie<T> {
 }
 
 impl<T> Debug for InputsTrie<T>
-where T: Debug + Copy
+where
+    T: Debug + Copy,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map().entries(self.iter()).finish()
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -388,19 +398,22 @@ mod test {
                 assert_eq!(Inputs::from($inputs).len(), $len);
             };
         }
-    
+
         macro_rules! assert_value {
             ($inputs:expr, $value:expr) => {
-                assert_eq!(Inputs::from($inputs).value, u8::from_str_radix($value, 4).unwrap());
-            }
+                assert_eq!(
+                    Inputs::from($inputs).value,
+                    u8::from_str_radix($value, 4).unwrap()
+                );
+            };
         }
-    
+
         // len
         assert_len!([], 0);
         assert_len!([Up], 1);
         assert_len!([Up, Right], 2);
         assert_len!([Up, Right, Down], 3);
-    
+
         // hash
         assert_value!([], "0000");
         assert_value!([Up], "0001");
@@ -411,55 +424,53 @@ mod test {
         assert_value!([Up, Right], "0102");
         assert_value!([Up, Right, Down], "0123");
         assert_value!([Left, Left, Left], "3333");
-    
+
         // push and pop
         let src = [Up, Right, Down];
         let rev = [Down, Right, Up];
-    
+
         let mut inputs = Inputs::new();
         for (i, input) in src.iter().copied().enumerate() {
             assert!(inputs.push(input));
-            assert_eq!(inputs, Inputs::from(&src[..i+1]));
+            assert_eq!(inputs, Inputs::from(&src[..i + 1]));
         }
         assert_eq!(inputs.push(Left), false);
-    
+
         for last in rev {
             assert_eq!(inputs.last(), Some(last));
             assert_eq!(inputs.pop(), Some(last));
         }
         assert_eq!(inputs.last(), None);
         assert_eq!(inputs.pop(), None);
-    
+
         // rev
         assert_eq!(Inputs::from([Up]).rev(), Inputs::from([Up]));
         assert_eq!(Inputs::from([Up, Right]).rev(), Inputs::from([Right, Up]));
         assert_eq!(Inputs::from([Up, Right, Down]).rev(), Inputs::from([Down, Right, Up]));
     }
-    
+
     #[test]
     fn bench_inputs() {
         const ROUNDS: usize = 1_000_000;
         macro_rules! push_and_pop {
-            ($target:ident) => {
-                {
-                    let start = std::time::Instant::now();
-                    let src = [Up, Right, Down, Left];
-                    for _ in 0..ROUNDS {
-                        for input in src {
-                            $target.push(input);
-                        }
-                        for _ in src {
-                            $target.pop();
-                        }
+            ($target:ident) => {{
+                let start = std::time::Instant::now();
+                let src = [Up, Right, Down, Left];
+                for _ in 0..ROUNDS {
+                    for input in src {
+                        $target.push(input);
                     }
-                    start.elapsed()
+                    for _ in src {
+                        $target.pop();
+                    }
                 }
-            };
+                start.elapsed()
+            }};
         }
-        
+
         let mut inputs = Inputs::new();
         let mut vec = Vec::with_capacity(Inputs::CAP as usize);
-    
+
         println!("Inputs:     {:?}", push_and_pop!(inputs));
         println!("Vec<Input>: {:?}", push_and_pop!(vec));
     }

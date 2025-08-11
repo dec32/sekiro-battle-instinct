@@ -67,7 +67,13 @@ impl FramerateInner {
     const SAMPLE_COUNT: u16 = 30;
 
     const fn new() -> FramerateInner {
-        FramerateInner { cur: DEFAULT_FRAMERATE, frames: 0, samples: 0, unlocked: false, since: None }
+        FramerateInner {
+            cur: DEFAULT_FRAMERATE,
+            frames: 0,
+            samples: 0,
+            unlocked: false,
+            since: None,
+        }
     }
 
     fn tick(&mut self) {
@@ -87,7 +93,7 @@ impl FramerateInner {
         self.frames = 0;
         self.since = Some(now);
         self.samples = self.samples.saturating_add(1);
-        
+
         if self.cur > DEFAULT_FRAMERATE + 5 {
             self.unlocked = true;
         }
@@ -102,7 +108,7 @@ impl FramerateInner {
         } else if self.samples < Self::SAMPLE_COUNT {
             log::trace!("Framerate: {}", self.cur);
             return;
-        } 
+        }
     }
 
     fn cur(&self) -> u16 {

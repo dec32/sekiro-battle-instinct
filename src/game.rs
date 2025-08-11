@@ -32,28 +32,33 @@ pub fn msg_repo() -> *const c_void {
     unsafe { *(MSG_REPO as *const *const c_void) }
 }
 
+#[rustfmt::skip]
 #[repr(C)]
 pub struct GameData { 
     _0: [u8;8], pub player_data: *const PlayerData 
 }
 
+#[rustfmt::skip]
 #[repr(C)]
 pub struct PlayerData { 
     _0: [u8;0x29c], pub equiped_items: [u32; 5],
     _1: [u8;0x06c], pub activte_prosthetic: u8,
     _2: [u8;0x293], pub inventory_data: *const InventoryData 
-} 
+}
 
+#[rustfmt::skip]
 #[repr(C)]
 pub struct InventoryData { 
     _0: [u8;16], pub inventory: c_void 
 }
 
+#[rustfmt::skip]
 #[repr(C)]
 pub struct InputHandler { 
     _0: [u8;16], pub action: u64 
 }
 
+#[rustfmt::skip]
 #[repr(C)]
 pub struct EquipData { 
     _0: [u8;56], pub item_id: u32,
@@ -61,10 +66,9 @@ pub struct EquipData {
 
 impl EquipData {
     pub fn new(item_id: u32) -> EquipData {
-        EquipData { _0: [0;56], item_id }
+        EquipData { _0: [0; 56], item_id }
     }
 }
-
 
 //----------------------------------------------------------------------------
 //
@@ -92,18 +96,16 @@ macro_rules! forward {
 forward! {
     @[GET_ITEM_NAME]
     fn get_item_name(msg_repo: *const c_void, uid: u32) -> *const u16;
-    
+
     @[GET_ITEM_ID]
     fn get_item_id(inventory: *const c_void, uid: *const u32) -> u32;
 
     @[SET_SLOT]
     fn set_slot(equip_slot: usize, equip_data: *const EquipData, ignore_equip_lock: bool);
-    
+
     @[SET_EQUIPED_PROTHSETIC]
     fn set_equipped_prosthetic(unknown: *const c_void, zero: u32, prosthetic_index: u32);
 }
-
-
 
 //----------------------------------------------------------------------------
 //
@@ -112,7 +114,7 @@ forward! {
 //----------------------------------------------------------------------------
 
 #[inline(always)]
-pub unsafe fn resolve_pointer_chain<R, const N: usize>(root: usize, offsets: [usize;N]) -> *mut R {
+pub unsafe fn resolve_pointer_chain<R, const N: usize>(root: usize, offsets: [usize; N]) -> *mut R {
     unsafe {
         let mut p = root as *mut ();
         for offset in offsets {

@@ -1,19 +1,29 @@
-use std::{collections::{HashMap, HashSet}, fs, io, path::Path};
-use widestring::U16CStr;
-use crate::{core::UID, game, input::{Input::*, Inputs, InputsTrie}};
+use std::{
+    collections::{HashMap, HashSet},
+    fs, io,
+    path::Path,
+};
 
-const COMBART_ART_UID_MIN: UID  = 5000;
-const COMBART_ART_UID_MAX: UID  = 10000;
-const PROSTHETIC_TOOL_UID_MIN: UID  = 70000;
-const PROSTHETIC_TOOL_UID_MAX: UID  = 100000;
+use widestring::U16CStr;
+
+use crate::{
+    core::UID,
+    game,
+    input::{Input::*, Inputs, InputsTrie},
+};
+
+const COMBART_ART_UID_MIN: UID = 5000;
+const COMBART_ART_UID_MAX: UID = 10000;
+const PROSTHETIC_TOOL_UID_MIN: UID = 70000;
+const PROSTHETIC_TOOL_UID_MAX: UID = 100000;
 
 #[derive(Debug)]
 pub struct Config {
     pub arts: InputsTrie<UID>,
-    pub tools: InputsTrie<&'static[UID]>,
-    pub tools_for_block: &'static[UID],
-    pub tools_on_x1: &'static[UID],
-    pub tools_on_x2: &'static[UID],
+    pub tools: InputsTrie<&'static [UID]>,
+    pub tools_for_block: &'static [UID],
+    pub tools_on_x1: &'static [UID],
+    pub tools_on_x2: &'static [UID],
 }
 
 impl Config {
@@ -42,10 +52,9 @@ impl<S: AsRef<str>> From<S> for Config {
         let mut tools_on_x2 = Vec::new();
         let mut used_inputs = HashSet::new();
         for line in value.as_ref().lines() {
-            let mut items = line.split_whitespace()
-                .take_while(|item|!item.starts_with("#"));
+            let mut items = line.split_whitespace().take_while(|item| !item.starts_with("#"));
             // between IDs and inputs there're names of combat arts. They're ignored here
-            let Some(id) = items.next().and_then(|id|id.parse::<UID>().ok()) else {
+            let Some(id) = items.next().and_then(|id| id.parse::<UID>().ok()) else {
                 continue;
             };
             let Some(inputs) = items.last() else {
@@ -56,7 +65,7 @@ impl<S: AsRef<str>> From<S> for Config {
                 PROSTHETIC_TOOL_UID_MIN..=PROSTHETIC_TOOL_UID_MAX => true,
                 COMBART_ART_UID_MIN..=COMBART_ART_UID_MAX => false,
                 _ => {
-                    log::warn!("Illegal ID {id} is ignored."); 
+                    log::warn!("Illegal ID {id} is ignored.");
                     continue;
                 }
             };
@@ -64,12 +73,14 @@ impl<S: AsRef<str>> From<S> for Config {
             if tool {
                 // tools to use when BLOCK is heled, usually umbrella
                 match inputs {
-                    "X1"|"M4" => tools_on_x1.push(id),
-                    "X2"|"M5" => tools_on_x2.push(id),
+                    "X1" | "M4" => tools_on_x1.push(id),
+                    "X2" | "M5" => tools_on_x2.push(id),
                     "⛉" | "BLOCK" => tools_for_block.push(id),
-                    other => if let Some(inputs) = parse_motion(other) {
-                        used_inputs.insert(inputs);
-                        tools.entry(inputs).or_insert_with(Vec::new).push(id);
+                    other => {
+                        if let Some(inputs) = parse_motion(other) {
+                            used_inputs.insert(inputs);
+                            tools.entry(inputs).or_insert_with(Vec::new).push(id);
+                        }
                     }
                 }
             } else {
@@ -87,7 +98,7 @@ impl<S: AsRef<str>> From<S> for Config {
         config.tools_for_block = tools_for_block.leak();
         config.tools_on_x1 = tools_on_x1.leak();
         config.tools_on_x2 = tools_on_x2.leak();
-        
+
         // fault tolernce
         for inputs in used_inputs {
             for alt_inputs in possible_altenrnatives(inputs) {
@@ -103,7 +114,6 @@ impl<S: AsRef<str>> From<S> for Config {
     }
 }
 
-
 // reuturns the input represented by the string and its alternative form when fault tolerance is available
 fn parse_motion(motion: &str) -> Option<Inputs> {
     if matches!(motion, "∅" | "NONE") {
@@ -111,12 +121,14 @@ fn parse_motion(motion: &str) -> Option<Inputs> {
     } else {
         let chars = motion.chars();
         let char_count = chars.count();
-        let inputs = motion.trim().chars()
-            .filter_map(|ch|ch.try_into().ok())
+        let inputs = motion
+            .trim()
+            .chars()
+            .filter_map(|ch| ch.try_into().ok())
             .collect::<Vec<_>>();
         // the last element of the line may not be the inputs but rather the name of the combat arts
         if inputs.len() != char_count {
-            return None
+            return None;
         }
         Some(inputs.into_iter().take(3).collect::<Inputs>())
     }
@@ -153,7 +165,6 @@ fn possible_altenrnatives(mut inputs: Inputs) -> Vec<Inputs> {
     }
 }
 
-
 #[allow(unused)]
 fn get_item_name(uid: UID) -> Option<String> {
     let p = game::get_item_name(game::msg_repo(), uid);
@@ -165,11 +176,10 @@ fn get_item_name(uid: UID) -> Option<String> {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use crate::{config::Config, input::Input::*};
-    
+
     #[test]
     fn test_load() {
         let raw = "
@@ -194,7 +204,5 @@ mod test {
         // semicircle tolerance
         assert_eq!(config.arts.get([Left, Down, Right]), Some(5600));
         assert_eq!(config.arts.get([Right, Down, Left]), Some(7200));
-        
     }
-    
 }

@@ -1,7 +1,19 @@
 use std::{fmt::Display, io, num::NonZero, path::Path};
-use windows::Win32::{Foundation::ERROR_SUCCESS, UI::Input::{KeyboardAndMouse::*, XboxController::{XInputGetState, XINPUT_STATE}}};
-use crate::{config::Config, frame::Frames, game::{self}, input::InputBuffer};
 
+use windows::Win32::{
+    Foundation::ERROR_SUCCESS,
+    UI::Input::{
+        KeyboardAndMouse::*,
+        XboxController::{XINPUT_STATE, XInputGetState},
+    },
+};
+
+use crate::{
+    config::Config,
+    frame::Frames,
+    game::{self},
+    input::InputBuffer,
+};
 
 //----------------------------------------------------------------------------
 //
@@ -88,7 +100,7 @@ impl Mod {
         }
     }
 
-    pub fn load_config(&mut self, path: &Path) -> io::Result<()>{
+    pub fn load_config(&mut self, path: &Path) -> io::Result<()> {
         self.config = Config::load(path)?;
         Ok(())
     }
@@ -103,8 +115,8 @@ impl Mod {
         let x1_down = is_key_down(VK_XBUTTON1);
         let x2_down = is_key_down(VK_XBUTTON2);
 
-        /***** update the motion inputs *****/ 
-        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos|*pos != (0, 0)) {
+        /***** update the motion inputs *****/
+        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos| *pos != (0, 0)) {
             self.buffer.update_joystick(x, y)
         } else {
             let up = w_down;
@@ -139,7 +151,7 @@ impl Mod {
             let mut tools: &[UID] = &[];
             if tools.is_empty() && x1_down {
                 tools = self.config.tools_on_x1;
-            } 
+            }
             if tools.is_empty() && x2_down {
                 tools = self.config.tools_on_x2;
             }
@@ -159,11 +171,11 @@ impl Mod {
                 if let Some(prev_slot) = self.prev_slot.take() {
                     activate_prosthetic_slot(prev_slot);
                 }
-                // the equipping code already handles the revert of ejected tools properly when there're default 
+                // the equipping code already handles the revert of ejected tools properly when there're default
                 // tools configured. revert at rollback is only for when there's no default tool configured
                 if let Some((ejected_tool, orignal_slot)) = self.ejection.take() {
                     equip_prosthetic(ejected_tool, orignal_slot);
-                } 
+                }
             }
             tools
         } else {
@@ -171,7 +183,7 @@ impl Mod {
             &[]
         };
 
-        /***** equip the desired prosthetic tool *****/ 
+        /***** equip the desired prosthetic tool *****/
         // revert the ejected tool as soon as we move away from its original slot
         // so that if any other tool needs to be ejected, it can be stored into `self.ejection`
         let active_slot = get_active_prosthetic_slot();
@@ -205,11 +217,11 @@ impl Mod {
                 // use the first one (that is owned by the player) in the list as the last resort
                 if !equipped {
                     // replace the tool in the active slot and remembers the ejected one for later revert
-                    // notice that only the first ever ejected tool is remembered because the latter ones are 
+                    // notice that only the first ever ejected tool is remembered because the latter ones are
                     // placed into the slot by the MOD but not the player. there's not point in reverting them
                     //
                     // placing the desired tool into some dedicated slot and activating that slot later can cause bugs.
-                    // that is because `equip_prosthetic` must happen AFTER `activate_prosthetic_slot` when they occur 
+                    // that is because `equip_prosthetic` must happen AFTER `activate_prosthetic_slot` when they occur
                     // within the same tick. activating the dedicated slot BEFORE placing any tool into it solves
                     // this problem of course but now it triggers a disgusting flickering in the slot UI instead
                     //
@@ -247,7 +259,7 @@ impl Mod {
             // for example, doing it while using Sakura Dance triggers the falling animation of High Monk
             // to cancel that unexpected animation, block/combat art need to take place
             // thus the moment of switching is delayed to when block/combat art happens
-            self.config.arts.get(inputs).inspect(|_|{
+            self.config.arts.get(inputs).inspect(|_| {
                 if inputs.meant_for_art() {
                     performed_block_free_art_just_now = true;
                 }
@@ -271,7 +283,7 @@ impl Mod {
             self.swapout_countdown = Countdown::new(self.cur_art.swapout_cooldown())
         }
 
-        /***** equip the desired combat art (or its fallback version) *****/ 
+        /***** equip the desired combat art (or its fallback version) *****/
         if let Some(desired_art) = desired_art {
             let mut desired_art = desired_art;
             loop {
@@ -284,12 +296,14 @@ impl Mod {
                     break;
                 }
                 desired_art = match desired_art {
-                    ICHIMONJI_DOUBLE =>         ICHIMONJI,
+                    ICHIMONJI_DOUBLE => ICHIMONJI,
                     PRAYING_STRIKES_EXORCISM => PRAYING_STRIKES,
-                    HIGH_MONK =>                SENPO_LEAPING_KICKS,
-                    SHADOWFALL =>               SHADOWRUSH,
-                    EMPOWERED_MORTAL_DRAW =>    MORTAL_DRAW,
-                    _ => { break; }
+                    HIGH_MONK => SENPO_LEAPING_KICKS,
+                    SHADOWFALL => SHADOWRUSH,
+                    EMPOWERED_MORTAL_DRAW => MORTAL_DRAW,
+                    _ => {
+                        break;
+                    }
                 }
             }
         }
@@ -322,9 +336,9 @@ impl Mod {
         }
 
         /***** action supression *****/
-        // when binding umbrella to BLOCK|USE_PROSTHETIC, cross slash gets a bit harder to perform 
+        // when binding umbrella to BLOCK|USE_PROSTHETIC, cross slash gets a bit harder to perform
         // because now players need to release BLOCK first to prevent combat arts from happening
-        // the solution is, of course, supress BLOCK for the player 
+        // the solution is, of course, supress BLOCK for the player
         if used_tool_just_now {
             self.disable_block = true;
         }
@@ -372,7 +386,7 @@ impl CombatArt for UID {
     fn swapout_cooldown(self) -> Frames {
         let frames = match self {
             ASHINA_CROSS => 75,
-            ONE_MIND     => 240,
+            ONE_MIND => 240,
             SAKURA_DANCE => 60,
             _ => 40,
         };
@@ -397,16 +411,22 @@ struct Countdown {
 
 impl Countdown {
     const fn zero() -> Countdown {
-        Countdown { value: 0, running: false }
+        Countdown {
+            value: 0,
+            running: false,
+        }
     }
 
     fn new(value: Frames) -> Countdown {
-        Countdown { value: value.as_actual(), running: false }
+        Countdown {
+            value: value.as_actual(),
+            running: false,
+        }
     }
 
     fn count(&mut self) {
-       self.value -= 1;
-       self.running = true;
+        self.value -= 1;
+        self.running = true;
     }
 
     fn count_on(&mut self, cond: bool) {
@@ -419,7 +439,6 @@ impl Countdown {
         self.value == 0
     }
 }
-
 
 //----------------------------------------------------------------------------
 //
@@ -442,7 +461,11 @@ impl Gamepad {
     const XUSER_MAX_COUNT: u32 = 3;
     const XINPUT_RETRY_INTERVAL: u16 = 300;
     const fn new() -> Gamepad {
-        Gamepad { connected: false, countdown: 0, latest_idx: 0 }
+        Gamepad {
+            connected: false,
+            countdown: 0,
+            latest_idx: 0,
+        }
     }
 
     fn get_left_pos(&mut self) -> Option<(i16, i16)> {
@@ -460,7 +483,7 @@ impl Gamepad {
             if res == ERROR_SUCCESS.0 {
                 self.connected = true;
                 self.latest_idx = idx;
-                return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY))
+                return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY));
             }
         }
         // failed. start countdown
@@ -469,7 +492,6 @@ impl Gamepad {
         return None;
     }
 }
-
 
 //----------------------------------------------------------------------------
 //
@@ -491,7 +513,7 @@ pub struct ItemID(NonZero<u32>);
 impl ItemID {
     #[inline(always)]
     pub fn new(value: u32) -> Option<ItemID> {
-        NonZero::<u32>::new(value).map(|inner|ItemID(inner))
+        NonZero::<u32>::new(value).map(|inner| ItemID(inner))
     }
 
     #[inline(always)]
@@ -505,8 +527,6 @@ impl Display for ItemID {
         Display::fmt(&self.0.get(), f)
     }
 }
-
-
 
 // Conversion between UID and ItemId
 trait ID: Display + Clone + Copy {
@@ -525,7 +545,7 @@ impl ID for UID {
     fn get_item_id(self) -> Option<ItemID> {
         let inventory = &inventory_data().inventory;
         let item_id = game::get_item_id(inventory, &self);
-        ItemID::new(item_id).filter(|it|it.get() < 0xFFFF)
+        ItemID::new(item_id).filter(|it| it.get() < 0xFFFF)
     }
 }
 
@@ -568,11 +588,7 @@ fn set_slot(item: impl ID, slot_index: usize) -> bool {
 fn get_prosthetic_tool(slot: ProstheticSlot) -> Option<ItemID> {
     let items = &player_data().equiped_items;
     let item_id = items[slot.as_slot_index()];
-    if item_id != 256 {
-        ItemID::new(item_id)
-    } else {
-        None
-    }
+    if item_id != 256 { ItemID::new(item_id) } else { None }
 }
 
 fn get_active_prosthetic_slot() -> ProstheticSlot {
@@ -581,14 +597,14 @@ fn get_active_prosthetic_slot() -> ProstheticSlot {
         0 => ProstheticSlot::S0,
         1 => ProstheticSlot::S1,
         2 => ProstheticSlot::S2,
-        illegal_slot => unreachable!("Illegal prosthetic slot: {illegal_slot}")
+        illegal_slot => unreachable!("Illegal prosthetic slot: {illegal_slot}"),
     }
 }
 
 fn locate_prosthetic_tool(tool: impl ID) -> Option<ProstheticSlot> {
     let items = &player_data().equiped_items;
     let Some(item_id) = tool.get_item_id() else {
-        return None
+        return None;
     };
     for slot in [ProstheticSlot::S0, ProstheticSlot::S1, ProstheticSlot::S2] {
         if items[slot.as_slot_index()] == item_id.get() {
@@ -601,7 +617,8 @@ fn locate_prosthetic_tool(tool: impl ID) -> Option<ProstheticSlot> {
 fn activate_prosthetic_slot(slot: ProstheticSlot) {
     use std::ffi::c_void;
     let unknown = unsafe {
-        let character_base: *const c_void = game::resolve_pointer_chain(game::WORLD_DATA, [0x88, 0x1F10, 0x10, 0xF8, 0x10, 0x18, 0x00]);
+        let character_base: *const c_void =
+            game::resolve_pointer_chain(game::WORLD_DATA, [0x88, 0x1F10, 0x10, 0xF8, 0x10, 0x18, 0x00]);
         *(character_base.byte_add(0x10) as *const *const c_void)
     };
     game::set_equipped_prosthetic(unknown, 0, slot.as_prosthetic_index());
