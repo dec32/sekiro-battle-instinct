@@ -9,10 +9,10 @@ const MAX_INTERVAL: Frames = Frames::standard(10);
 const MAX_DELAY: Frames = Frames::standard(10);
 const MAX_DELAY_FOR_SINGLE_INPUT: Frames = Frames::standard(2);
 // joystick ergonomics
-const COMMON_THRESHOLD: u16 = MAX_DISTANCE / 100 * 85;
-const ROTATE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 90;
-const BOUNCE_THRESHOLD: u16 = MAX_DISTANCE / 100 * 40;
-const MAX_DISTANCE: u16 = i16::MAX as u16;
+const COMMON_THRESHOLD: f32 = MAX_DISTANCE * 0.85;
+const ROTATE_THRESHOLD: f32 = MAX_DISTANCE * 0.9;
+const BOUNCE_THRESHOLD: f32 = MAX_DISTANCE * 0.4;
+const MAX_DISTANCE: f32 = f32::MAX;
 
 //----------------------------------------------------------------------------
 //
@@ -54,19 +54,19 @@ impl InputBuffer {
         self.inputs
     }
 
-    pub fn update_joystick(&mut self, x: i16, y: i16) -> Inputs {
+    pub fn update_joystick(&mut self, x: f32, y: f32) -> Inputs {
         let mut updated = false;
-        let x_abs = x.unsigned_abs();
-        let y_abs = y.unsigned_abs();
+        let x_abs = x.abs();
+        let y_abs = y.abs();
 
         let input = if y_abs >= x_abs {
-            if y > 0 { Up } else { Down }
+            if y > 0.0 { Up } else { Down }
         } else {
-            if x > 0 { Right } else { Left }
+            if x > 0.0 { Right } else { Left }
         };
 
         // using chebyshev distance means we have a square-shaped neutral zone
-        let distance = u16::max(x_abs, y_abs);
+        let distance = f32::max(x_abs, y_abs);
         let threshold = if let Some(last) = self.inputs.last() {
             if input == last {
                 COMMON_THRESHOLD
@@ -346,7 +346,7 @@ pub struct InputsTrie<T> {
 }
 
 impl<T: Copy> InputsTrie<T> {
-    pub const fn new() -> InputsTrie<T> {
+    pub fn new() -> InputsTrie<T> {
         InputsTrie {
             array: [None; Inputs::MAX_HASHCODE + 1],
         }

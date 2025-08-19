@@ -27,7 +27,13 @@ pub struct Config {
 }
 
 impl Config {
-    pub const fn new() -> Config {
+    pub fn open(path: impl AsRef<Path>) -> io::Result<Config> {
+        Ok(fs::read_to_string(path)?.to_ascii_uppercase().into())
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
         Config {
             arts: InputsTrie::new(),
             tools: InputsTrie::new(),
@@ -36,16 +42,11 @@ impl Config {
             tools_on_x2: &[],
         }
     }
-
-    pub fn load(path: impl AsRef<Path>) -> io::Result<Config> {
-        let file = fs::read_to_string(path)?.to_ascii_uppercase();
-        Ok(file.into())
-    }
 }
 
 impl<S: AsRef<str>> From<S> for Config {
     fn from(value: S) -> Config {
-        let mut config = Config::new();
+        let mut config = Config::default();
         let mut tools = HashMap::<Inputs, Vec<UID>>::new();
         let mut tools_for_block = Vec::new();
         let mut tools_on_x1 = Vec::new();

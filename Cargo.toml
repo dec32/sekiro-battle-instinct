@@ -12,6 +12,7 @@ fern = "0.6"
 chrono = "0.4"
 minhook = "0.6.0"
 widestring = "1.2.0"
+gilrs = "0.11.0"
 
 
 [dependencies.windows]
@@ -26,7 +27,7 @@ features = [
     "Win32_UI",
     "Win32_UI_Input",
     "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_Input_XboxController"
+    "Win32_UI_Input_XboxController",
 ]
 
 [lib]

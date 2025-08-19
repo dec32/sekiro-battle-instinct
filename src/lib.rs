@@ -1,5 +1,6 @@
 mod config;
 mod core;
+mod device;
 mod frame;
 mod game;
 mod input;
@@ -96,37 +97,37 @@ fn load_dll() -> windows::core::Result<fn(HINSTANCE, u32, *const GUID, *mut *mut
 //----------------------------------------------------------------------------
 
 fn chainload(path: &Path) {
-    _chainload(path)
-        .inspect_err(|e| log::error!("Failed to chainload other dinput8.dll files. {e}"))
-        .ok();
-}
+    let res: Result<()> = (|| {
+        let mut names = Vec::new();
+        for entry in fs::read_dir(path)?.filter_map(Result::ok) {
+            let name = entry.file_name();
+            let name_lossy = name.to_string_lossy();
+            // We really needs an STD regex lib
+            if !name_lossy.starts_with("dinput8_") {
+                continue;
+            }
+            if !name_lossy.ends_with(".dll") {
+                continue;
+            }
+            names.push(name);
+        }
+        // Load the DLL by the order of names so that players can use names like
+        // dinput8_1_xxx.dll, dinput8_2_xxx.dll to determine chainload order
+        names.sort();
+        for name in names {
+            let path = path.join(&name);
+            let path = path.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
+            unsafe {
+                LoadLibraryW(PCWSTR::from_raw(path.as_ptr()))?;
+            }
+            log::debug!("Chainloaded dll: {name:?}");
+        }
+        Ok(())
+    })();
 
-fn _chainload(path: &Path) -> Result<()> {
-    let mut names = Vec::new();
-    for entry in fs::read_dir(path)?.filter_map(Result::ok) {
-        let name = entry.file_name();
-        let name_lossy = name.to_string_lossy();
-        // We really needs an STD regex lib
-        if !name_lossy.starts_with("dinput8_") {
-            continue;
-        }
-        if !name_lossy.ends_with(".dll") {
-            continue;
-        }
-        names.push(name);
+    if let Err(e) = res {
+        log::error!("Error occured when chainloading. {e:?}")
     }
-    // Load the DLL by the order of names so that players can use names like
-    // dinput8_1_xxx.dll, dinput8_2_xxx.dll to determine chainload order
-    names.sort();
-    for name in names {
-        let path = path.join(&name);
-        let path = path.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
-        unsafe {
-            LoadLibraryW(PCWSTR::from_raw(path.as_ptr()))?;
-        }
-        log::debug!("Chainloaded dll: {name:?}");
-    }
-    Ok(())
 }
 
 //----------------------------------------------------------------------------
@@ -136,36 +137,53 @@ fn _chainload(path: &Path) -> Result<()> {
 //----------------------------------------------------------------------------
 
 const HOOK_DELAY: Duration = Duration::from_secs(10);
-static MOD: Mutex<Mod> = Mutex::new(Mod::new());
-static PROCESS_INPUT_ORIG: OnceLock<fn(*mut game::InputHandler, usize) -> usize> = OnceLock::new();
+
+static STATE: OnceLock<State> = OnceLock::new();
+
+struct State {
+    modification: Mutex<Mod>,
+    process_input_orig: fn(*mut game::InputHandler, usize) -> usize,
+}
 
 fn modify(path: &Path) {
     let path = path.join("battle_instinct.cfg");
-    thread::spawn(|| {
-        // hooking fails if it starts too soon (MH_ERROR_UNSUPPORTED_FUNCTION)
+    thread::spawn(move || {
         thread::sleep(HOOK_DELAY);
-        _modify(path).inspect_err(|e| log::error!("Errored occured when modulating. {e}"))
+        let result: Result<()> = (|| unsafe {
+            let modification = Mutex::new(Mod::new(path)?);
+
+            let target = game::PROCESS_INPUT as *mut c_void;
+            let detour = process_input as *mut c_void;
+            let process_input_orig = MinHook::create_hook(target, detour).map_err(|e| anyhow!("{e:?}"))?;
+            let process_input_orig = mem::transmute(process_input_orig);
+
+            let state = State {
+                modification,
+                process_input_orig,
+            };
+
+            STATE.set(state).map_err(|_| anyhow!("Failed to set STATE"))?;
+            MinHook::enable_all_hooks().map_err(|e| anyhow!("{e:?}"))?;
+            Ok(())
+        })();
+
+        if let Err(e) = result {
+            log::error!("Errored occured when modifying the game. {e:?}")
+        }
     });
 }
 
-fn _modify(path: PathBuf) -> Result<()> {
-    MOD.lock().unwrap().load_config(&path)?;
-    unsafe {
-        let process_input_orig = MinHook::create_hook(game::PROCESS_INPUT as *mut c_void, process_input as *mut c_void)
-            .map_err(|e| anyhow!("{e:?}"))?;
-        PROCESS_INPUT_ORIG.set(mem::transmute(process_input_orig)).unwrap();
-        MinHook::enable_all_hooks().map_err(|e| anyhow!("{e:?}"))?;
-    }
-    Ok(())
-}
-
 fn process_input(input_handler: *mut game::InputHandler, arg: usize) -> usize {
-    unsafe {
+    let input_handler = unsafe {
         FRAMERATE.tick();
-    }
-    MOD.lock()
-        .unwrap()
-        .process_input(unsafe { input_handler.as_mut().expect("input_handler is null") });
-    let process_input_orig = PROCESS_INPUT_ORIG.get().copied().unwrap();
+        input_handler.as_mut().expect("input_handler is null")
+    };
+
+    let State {
+        modification,
+        process_input_orig,
+    } = STATE.get().unwrap();
+
+    modification.lock().unwrap().process_input(input_handler);
     process_input_orig(input_handler, arg)
 }

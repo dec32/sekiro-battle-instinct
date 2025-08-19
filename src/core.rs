@@ -1,15 +1,11 @@
-use std::{fmt::Display, io, num::NonZero, path::Path};
+use std::{fmt::Display, num::NonZero, path::Path};
 
-use windows::Win32::{
-    Foundation::ERROR_SUCCESS,
-    UI::Input::{
-        KeyboardAndMouse::*,
-        XboxController::{XINPUT_STATE, XInputGetState},
-    },
-};
+use anyhow::Result;
+use windows::Win32::UI::Input::KeyboardAndMouse::*;
 
 use crate::{
     config::Config,
+    device::{Gamepad, is_key_down},
     frame::Frames,
     game::{self},
     input::InputBuffer,
@@ -80,9 +76,10 @@ pub struct Mod {
 }
 
 impl Mod {
-    pub const fn new() -> Mod {
-        Mod {
-            config: Config::new(),
+    pub fn new(path: impl AsRef<Path>) -> Result<Mod> {
+        let modification = Mod {
+            config: Config::open(path)?,
+            gamepad: Gamepad::new()?,
             buffer: InputBuffer::new(),
             cur_art: None,
             blocking_last_frame: false,
@@ -96,13 +93,8 @@ impl Mod {
             disable_block: false,
             prev_slot: None,
             ejection: None,
-            gamepad: Gamepad::new(),
-        }
-    }
-
-    pub fn load_config(&mut self, path: &Path) -> io::Result<()> {
-        self.config = Config::load(path)?;
-        Ok(())
+        };
+        Ok(modification)
     }
 
     pub fn process_input(&mut self, input_handler: &mut game::InputHandler) {
@@ -116,7 +108,7 @@ impl Mod {
         let x2_down = is_key_down(VK_XBUTTON2);
 
         /***** update the motion inputs *****/
-        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos| *pos != (0, 0)) {
+        let inputs = if let Some((x, y)) = self.gamepad.get_left_pos().filter(|pos| *pos != (0.0, 0.0)) {
             self.buffer.update_joystick(x, y)
         } else {
             let up = w_down;
@@ -437,59 +429,6 @@ impl Countdown {
 
     fn is_done(&self) -> bool {
         self.value == 0
-    }
-}
-
-//----------------------------------------------------------------------------
-//
-//  Wrappers of Windows APIs
-//
-//----------------------------------------------------------------------------
-
-fn is_key_down(keycode: VIRTUAL_KEY) -> bool {
-    unsafe { GetKeyState(keycode.0.into()) as u16 & 0x8000 != 0 }
-}
-
-// todo: add support for ps5 controllers
-struct Gamepad {
-    connected: bool,
-    countdown: u16,
-    latest_idx: u32,
-}
-
-impl Gamepad {
-    const XUSER_MAX_COUNT: u32 = 3;
-    const XINPUT_RETRY_INTERVAL: u16 = 300;
-    const fn new() -> Gamepad {
-        Gamepad {
-            connected: false,
-            countdown: 0,
-            latest_idx: 0,
-        }
-    }
-
-    fn get_left_pos(&mut self) -> Option<(i16, i16)> {
-        // checking a disconnected controller slot requires device enumeration,
-        // which can be a performance hit
-        if self.countdown > 0 {
-            self.countdown -= 1;
-            return None;
-        }
-        // checking controllers
-        let mut xinput_state = XINPUT_STATE::default();
-        for idx in self.latest_idx..self.latest_idx + Self::XUSER_MAX_COUNT {
-            let idx = idx % Self::XUSER_MAX_COUNT;
-            let res = unsafe { XInputGetState(idx, &mut xinput_state) };
-            if res == ERROR_SUCCESS.0 {
-                self.connected = true;
-                self.latest_idx = idx;
-                return Some((xinput_state.Gamepad.sThumbLX, xinput_state.Gamepad.sThumbLY));
-            }
-        }
-        // failed. start countdown
-        self.connected = false;
-        self.countdown = Self::XINPUT_RETRY_INTERVAL;
-        return None;
     }
 }
 
