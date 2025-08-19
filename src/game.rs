@@ -87,7 +87,7 @@ macro_rules! forward {
             #[inline(always)]
             #[allow(unused)]
             pub fn $name($($arg: $arg_ty),*) $(-> $ret_ty)? {
-                unsafe { std::mem::transmute::<_, extern fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
+                unsafe { std::mem::transmute::<_, extern "system" fn($($arg: $arg_ty),*)$(-> $ret_ty)?>($address as *const ())($($arg),*) }
             }
         )*
     };

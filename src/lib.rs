@@ -39,7 +39,7 @@ use windows::{
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case, dead_code)]
-extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: *mut ()) -> bool {
+extern "system" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: *mut ()) -> bool {
     if call_reason == DLL_PROCESS_ATTACH {
         logger::setup().ok();
         let mut buf: Vec<u16> = vec![0; 128];
@@ -59,7 +59,7 @@ extern "stdcall" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: 
 //----------------------------------------------------------------------------
 
 #[unsafe(no_mangle)]
-extern "stdcall" fn DirectInput8Create(
+extern "system" fn DirectInput8Create(
     hinst: HINSTANCE,
     dwversion: u32,
     riidltf: *const GUID,
