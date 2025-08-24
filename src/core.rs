@@ -1,6 +1,4 @@
-use std::{fmt::Display, num::NonZero, path::Path};
-
-use anyhow::Result;
+use std::{fmt, num::NonZero, path::Path};
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 
 use crate::{
@@ -76,7 +74,7 @@ pub struct Mod {
 }
 
 impl Mod {
-    pub fn new(path: impl AsRef<Path>) -> Result<Mod> {
+    pub fn new(path: impl AsRef<Path>) -> anyhow::Result<Mod> {
         let modification = Mod {
             config: Config::open(path)?,
             gamepad: Gamepad::new()?,
@@ -452,7 +450,7 @@ pub struct ItemID(NonZero<u32>);
 impl ItemID {
     #[inline(always)]
     pub fn new(value: u32) -> Option<ItemID> {
-        NonZero::<u32>::new(value).map(|inner| ItemID(inner))
+        NonZero::<u32>::new(value).map(ItemID)
     }
 
     #[inline(always)]
@@ -461,14 +459,14 @@ impl ItemID {
     }
 }
 
-impl Display for ItemID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0.get(), f)
+impl fmt::Display for ItemID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.get().fmt(f)
     }
 }
 
 // Conversion between UID and ItemId
-trait ID: Display + Clone + Copy {
+trait ID: fmt::Display + Clone + Copy {
     fn get_item_id(self) -> Option<ItemID>;
 }
 
@@ -563,14 +561,14 @@ fn activate_prosthetic_slot(slot: ProstheticSlot) {
     game::set_equipped_prosthetic(unknown, 0, slot.as_prosthetic_index());
 }
 
-fn game_data<'a>() -> &'a game::GameData {
-    unsafe { game::game_data().as_ref().expect("game_data is null.") }
+fn game_data() -> &'static game::GameData {
+    unsafe { game::game_data().as_ref().expect("`game_data` is null.") }
 }
 
-fn player_data<'a>() -> &'a game::PlayerData {
-    unsafe { game_data().player_data.as_ref().expect("player_data is null.") }
+fn player_data() -> &'static game::PlayerData {
+    unsafe { game_data().player_data.as_ref().expect("`player_data` is null.") }
 }
 
-fn inventory_data<'a>() -> &'a game::InventoryData {
-    unsafe { player_data().inventory_data.as_ref().expect("inventory_data is null") }
+fn inventory_data() -> &'static game::InventoryData {
+    unsafe { player_data().inventory_data.as_ref().expect("`inventory_data` is null") }
 }

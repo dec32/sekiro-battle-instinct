@@ -17,12 +17,12 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::anyhow;
 use frame::FRAMERATE;
 use minhook::MinHook;
 use windows::{
     Win32::{
-        Foundation::{GetLastError, HINSTANCE},
+        Foundation::{GetLastError, HINSTANCE, HMODULE},
         System::{
             LibraryLoader::{GetModuleFileNameW, GetProcAddress, LoadLibraryW},
             SystemInformation::GetSystemDirectoryW,
@@ -39,14 +39,13 @@ use windows::{
 //----------------------------------------------------------------------------
 
 #[unsafe(no_mangle)]
-#[allow(non_snake_case, dead_code)]
-extern "system" fn DllMain(dll_module: HINSTANCE, call_reason: u32, _reserved: *mut ()) -> bool {
+extern "system" fn DllMain(hmodule: HMODULE, call_reason: u32, _reserved: *mut c_void) -> bool {
     if call_reason == DLL_PROCESS_ATTACH {
-        logger::setup().ok();
         let mut buf: Vec<u16> = vec![0; 128];
-        let len = unsafe { GetModuleFileNameW(dll_module, buf.as_mut_slice()) } as usize;
+        let len = unsafe { GetModuleFileNameW(hmodule, buf.as_mut_slice()) } as usize;
         let dll_path = PathBuf::from(OsString::from_wide(&buf[..len]));
         let dir_path = dll_path.parent().unwrap();
+        logger::init(dir_path);
         chainload(dir_path);
         modify(dir_path);
     }
@@ -97,7 +96,7 @@ fn load_dll() -> windows::core::Result<fn(HINSTANCE, u32, *const GUID, *mut *mut
 //----------------------------------------------------------------------------
 
 fn chainload(path: &Path) {
-    let res: Result<()> = (|| {
+    let res: anyhow::Result<()> = (|| {
         let mut names = Vec::new();
         for entry in fs::read_dir(path)?.filter_map(Result::ok) {
             let name = entry.file_name();
@@ -149,7 +148,7 @@ fn modify(path: &Path) {
     let path = path.join("battle_instinct.cfg");
     thread::spawn(move || {
         thread::sleep(HOOK_DELAY);
-        let result: Result<()> = (|| unsafe {
+        let result: anyhow::Result<()> = (|| unsafe {
             let modification = Mutex::new(Mod::new(path)?);
 
             let target = game::PROCESS_INPUT as *mut c_void;

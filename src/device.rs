@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{error, fmt};
 
 use gilrs::{Axis, EventType, Gilrs};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY};
@@ -43,10 +43,10 @@ impl Gamepad {
 pub enum Error {
     NotImplemented,
     InvalidAxisToBtn,
-    Other(#[allow(unused)] Box<dyn std::error::Error + Send + Sync + 'static>),
+    Other(#[allow(unused)] Box<dyn error::Error + Send + Sync + 'static>),
 }
 
-impl std::error::Error for Error {}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
