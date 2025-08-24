@@ -1,42 +1,40 @@
 use std::{
-    env,
     fs::{self},
     os::windows::fs::MetadataExt,
-    path::PathBuf,
+    path::Path,
 };
 
-use anyhow::Result;
 use chrono::Local;
-use log::{self, Level, LevelFilter::*};
+use log::{self, Level, LevelFilter};
 
 #[cfg(debug_assertions)]
-const RELEASE: bool = false;
+const LEVEL: LevelFilter = LevelFilter::Debug;
 #[cfg(not(debug_assertions))]
-const RELEASE: bool = true;
+const LEVEL: LevelFilter = LevelFilter::Warn;
 
-pub fn setup() -> Result<()> {
-    let path = PathBuf::from(env::var("APPDATA")?).join("Sekiro");
-    fs::create_dir_all(&path)?;
-    let path = path.join("battle_instinct.log");
-    if let Ok(meta) = fs::metadata(&path) {
-        if meta.file_size() >= 5 * 1024 * 1024 {
-            fs::remove_file(&path).ok();
+pub fn init(path: &Path) {
+    let _: anyhow::Result<()> = (|| {
+        let path = path.join("battle_instinct.log");
+        if let Ok(meta) = fs::metadata(&path)
+            && meta.file_size() >= 5 * 1024 * 1024
+        {
+            let _ = fs::remove_file(&path);
         }
-    }
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{} [{:<3}] {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                record.level().abbr(),
-                message
-            ))
-        })
-        .level(if RELEASE { Warn } else { Debug })
-        .chain(fern::log_file(path)?)
-        .apply()?;
-    std::panic::set_hook(Box::new(|info| log::error!("{info}")));
-    Ok(())
+        fern::Dispatch::new()
+            .format(|out, args, record| {
+                out.finish(format_args!(
+                    "{} [{:<3}] {}",
+                    Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    record.level().abbr(),
+                    args
+                ))
+            })
+            .level(LEVEL)
+            .chain(fern::log_file(path)?)
+            .apply()?;
+        std::panic::set_hook(Box::new(|info| log::error!("{info}")));
+        Ok(())
+    })();
 }
 
 trait LevelExt {
