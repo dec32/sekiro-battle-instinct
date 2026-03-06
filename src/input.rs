@@ -9,10 +9,9 @@ const MAX_INTERVAL: Frames = Frames::standard(10);
 const MAX_DELAY: Frames = Frames::standard(10);
 const MAX_DELAY_FOR_SINGLE_INPUT: Frames = Frames::standard(2);
 // joystick ergonomics
-const COMMON_THRESHOLD: f32 = MAX_DISTANCE * 0.85;
-const ROTATE_THRESHOLD: f32 = MAX_DISTANCE * 0.9;
-const BOUNCE_THRESHOLD: f32 = MAX_DISTANCE * 0.4;
-const MAX_DISTANCE: f32 = f32::MAX;
+const COMMON_THRESHOLD: f32 = 0.85;
+const ROTATE_THRESHOLD: f32 = 0.9;
+const BOUNCE_THRESHOLD: f32 = 0.4;
 
 //----------------------------------------------------------------------------
 //
