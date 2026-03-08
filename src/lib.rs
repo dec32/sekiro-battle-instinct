@@ -148,12 +148,12 @@ fn modify(path: &Path) {
     let path = path.join("battle_instinct.cfg");
     thread::spawn(move || {
         thread::sleep(HOOK_DELAY);
-        let result: anyhow::Result<()> = (|| unsafe {
+        let result = (|| unsafe {
             let modification = Mutex::new(Mod::new(path)?);
 
             let target = game::PROCESS_INPUT as *mut c_void;
             let detour = process_input as *mut c_void;
-            let process_input_orig = MinHook::create_hook(target, detour).map_err(|e| anyhow!("{e:?}"))?;
+            let process_input_orig = MinHook::create_hook(target, detour)?;
             let process_input_orig = mem::transmute(process_input_orig);
 
             let state = State {
@@ -162,8 +162,8 @@ fn modify(path: &Path) {
             };
 
             STATE.set(state).map_err(|_| anyhow!("Failed to set STATE"))?;
-            MinHook::enable_all_hooks().map_err(|e| anyhow!("{e:?}"))?;
-            Ok(())
+            MinHook::enable_all_hooks()?;
+            Ok::<_, anyhow::Error>(())
         })();
 
         if let Err(e) = result {

@@ -8,7 +8,7 @@ anyhow = "1.0.94"
 log = "0.4"
 fern = "0.6"
 chrono = "0.4"
-minhook = "0.6.0"
+minhook = "0.9.0"
 widestring = "1.2.0"
 gilrs = "0.11.0"
 
