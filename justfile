@@ -17,6 +17,6 @@ pack:
     rm -rf "./tmp"
 release:
     just pack
-    git tag -d nightly
-    git push --delete origin nightly
-    gh release create nightly "./battle-instinct.zip", "./battle-instinct_zh.zip" -t "Nightly Build" -n "Nightly Build"
+    git tag -d nightly || true
+    git push --delete origin nightly || true
+    gh release create nightly "./battle-instinct.zip" "./battle-instinct_zh.zip" -t "Nightly Build" -n "Nightly Build"
