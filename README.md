@@ -1,12 +1,12 @@
 # Battle Instinct
 
-Battle Instinct is a MOD for *Sekiro: Shadow Dies Twice*. It gives players the ability to use combat arts and prosthetic tools with **motion inputs**, without manually switching between them.
+Battle Instinct is a MOD for *Sekiro: Shadows Die Twice*. It gives players the ability to use combat arts and prosthetic tools with **motion inputs**, without manually switching between them.
 
-The MOD supports both MNK and gamepads.
+The MOD supports both keyboard and mouse, and gamepads (supporting both XInput and DualSense natively).
 
 ## Install
 
-Click link below to download the MOD.
+Download the MOD via the link below.
 
 [![[DOWNLOAD]](https://img.shields.io/badge/DOWNLOAD-battle--instinct.zip-blue)](https://github.com/dec32/sekiro-battle-instinct/releases/latest/download/battle-instinct.zip)
 
@@ -36,11 +36,11 @@ Press <kbd>Block</kbd> + <kbd>Attack</kbd> to perform the default combat art.
 
 ![](./docs/combat_art_0.webp)
 
-**Hold** a motion input and pressing <kbd>Block</kbd> + <kbd>Attack</kbd> performs the combat art bound to that direction. This is similar to how you perform Nightjar Slash Reversal in the vanilla game.
+Press <kbd>Block</kbd> + <kbd>Attack</kbd> while **holding** a direction to perform the corresponding combat art. This is similar to how you perform Nightjar Slash Reversal in the vanilla game.
 
 ![](./docs/combat_art_1.webp)
 
-A combat art can also be bound to a sequence of motion inputs. When performing such combat arts, <kbd>Block</kbd> can be omitted, and the motion inputs can be **released** before attacking.
+Combat arts can also be bound to input sequences (e.g., ↑↑). When performing these, <kbd>Block</kbd> can be omitted, and the motion inputs maybe be **released** before pressing <kbd>Attack</kbd>.
 
 ![](./docs/combat_art_2.webp)
 
@@ -79,7 +79,7 @@ The file is a plain text table formatted with whitespace characters. The first c
 4. `⛉`, which means this is the prosthetic tool to use when <kbd>Block</kbd> is held.
 5. `M4`/`M5`, which means this is the prosthetic tool to use when one of the two mouse side buttons is pressed.
 
-Notice that you can bind **multiple prosthetic tools** to the **same input sequence**. The MOD always prefers the already equipped prosthetic tools and tries to switch to them first. If none equiped, the MOD will choose the first one that is configured in the file.
+Notice that you can bind **multiple prosthetic tools** to the **same input sequence**. The MOD always prefers the already equipped prosthetic tools and tries to switch to them first. If none equipped, the MOD will choose the first one that is configured in the file.
 
 The columns in between store the names of the skills. They're only there for reference. Feel free to modify or delete them.
 
